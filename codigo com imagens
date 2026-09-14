@@ -1,0 +1,600 @@
+import tkinter as tk
+from tkinter import messagebox
+import psycopg2
+
+from PIL import Image, ImageTk
+
+
+NUM_SALAS = 3
+NUM_FILAS = 10
+LUGARES_POR_FILA = 20
+
+
+CARTAZES = {
+    1: "Homem-Aranha.png",
+    2: "odisseia.png",
+    3: "toy-story.png"
+}
+
+FILMES = {
+    1: "Homem-Aranha: Brand New Day",
+    2: "The Odyssey",
+    3: "Toy Story 5"
+}
+
+def conectar_banco():
+    return psycopg2.connect(
+        host="localhost",
+        user="postgres",
+        password="root",
+        port="5432",
+        dbname="cinema"
+    )
+
+
+try:
+    conexao = conectar_banco()
+
+    print("CONEXÃO COM O BANCO FUNCIONOU!")
+
+    conexao.close()
+
+except Exception as erro:
+    print("ERRO AO CONECTAR:")
+    print(erro)
+
+
+def abrir_mostrar_sala():
+
+    janela = tk.Toplevel(root)
+
+    janela.title("Mostrar Sala")
+    janela.geometry("400x350")
+
+    tk.Label(
+        janela,
+        text="Escolha uma sala:",
+        font=("Arial", 16, "bold")
+    ).pack(pady=20)
+
+    for i in range(NUM_SALAS):
+
+        tk.Button(
+            janela,
+            text=f"Sala {i + 1} - {FILMES[i + 1]}",
+            width=35,
+            command=lambda sala=i: mostrar_sala_gui(sala)
+        ).pack(pady=5)
+
+
+def mostrar_sala_gui(numero_sala):
+
+    numero = numero_sala + 1
+
+    janela = tk.Toplevel(root)
+
+    janela.title(f"Sala {numero} - {FILMES[numero]}")
+    janela.geometry("1200x850")
+
+    tk.Label(
+        janela,
+        text=f"SALA {numero}",
+        font=("Arial", 22, "bold")
+    ).pack(pady=(10, 2))
+
+    tk.Label(
+        janela,
+        text=FILMES[numero],
+        font=("Arial", 16)
+    ).pack(pady=(0, 10))
+
+
+    try:
+
+        imagem = Image.open(CARTAZES[numero])
+
+        # Redimensiona o cartaz
+        imagem.thumbnail((250, 350))
+
+        poster = ImageTk.PhotoImage(imagem)
+
+        label_cartaz = tk.Label(
+            janela,
+            image=poster
+        )
+
+        label_cartaz.pack(pady=5)
+
+        # IMPORTANTE:
+        # mantém a imagem na memória
+        janela.poster_img = poster
+
+    except Exception as erro:
+
+        tk.Label(
+            janela,
+            text=f"Não foi possível carregar o cartaz.\n{erro}",
+            fg="red"
+        ).pack(pady=20)
+
+
+    frame = tk.Frame(janela)
+    frame.pack(pady=15)
+
+
+    tk.Label(
+        frame,
+        text="TELA",
+        bg="black",
+        fg="white",
+        font=("Arial", 12, "bold"),
+        width=80,
+        height=2
+    ).grid(
+        row=0,
+        column=0,
+        columnspan=LUGARES_POR_FILA + 1,
+        pady=(0, 15)
+    )
+
+
+    try:
+
+        conexao = conectar_banco()
+        cursor = conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                a.fila,
+                a.lugar,
+                CASE
+                    WHEN r.id_reserva IS NULL THEN 0
+                    ELSE 1
+                END AS reservado
+
+            FROM assento a
+
+            LEFT JOIN reserva r
+            ON a.id_assento = r.id_assento
+
+            WHERE a.id_sala = %s
+
+            ORDER BY a.fila, a.lugar
+            """,
+            (numero,)
+        )
+
+        assentos = cursor.fetchall()
+
+        cursor.close()
+        conexao.close()
+
+    except Exception as erro:
+
+        messagebox.showerror(
+            "Erro",
+            f"Erro ao acessar o banco:\n{erro}"
+        )
+
+        return
+
+
+    # Número das colunas
+    for lugar in range(LUGARES_POR_FILA):
+
+        tk.Label(
+            frame,
+            text=str(lugar),
+            width=3,
+            font=("Arial", 8, "bold")
+        ).grid(
+            row=1,
+            column=lugar + 1,
+            padx=2,
+            pady=2
+        )
+
+
+    # Número das filas
+    for fila in range(NUM_FILAS):
+
+        tk.Label(
+            frame,
+            text=f"Fila {fila}",
+            width=8,
+            font=("Arial", 8, "bold")
+        ).grid(
+            row=fila + 2,
+            column=0,
+            padx=2,
+            pady=2
+        )
+
+
+    # Criar os lugares
+    for fila, lugar, reservado in assentos:
+
+        if reservado == 0:
+
+            cor = "green"
+            texto = str(lugar)
+
+        else:
+
+            cor = "red"
+            texto = "X"
+
+        tk.Label(
+            frame,
+            text=texto,
+            width=3,
+            bg=cor,
+            fg="white",
+            font=("Arial", 8, "bold")
+        ).grid(
+            row=fila + 2,
+            column=lugar + 1,
+            padx=2,
+            pady=2
+        )
+
+
+
+    legenda = tk.Frame(janela)
+    legenda.pack(pady=15)
+
+    tk.Label(
+        legenda,
+        text="  LIVRE  ",
+        bg="green",
+        fg="white",
+        font=("Arial", 10, "bold")
+    ).pack(side="left", padx=10)
+
+    tk.Label(
+        legenda,
+        text="  RESERVADO  ",
+        bg="red",
+        fg="white",
+        font=("Arial", 10, "bold")
+    ).pack(side="left", padx=10)
+
+
+
+def abrir_reservar():
+
+    janela = tk.Toplevel(root)
+
+    janela.title("Reservar Lugar")
+    janela.geometry("400x450")
+
+    tk.Label(
+        janela,
+        text="Reservar Lugar",
+        font=("Arial", 18, "bold")
+    ).pack(pady=15)
+
+
+    tk.Label(
+        janela,
+        text="Sala:"
+    ).pack()
+
+    sala_var = tk.IntVar(value=1)
+
+    tk.OptionMenu(
+        janela,
+        sala_var,
+        *range(1, NUM_SALAS + 1)
+    ).pack(pady=5)
+
+
+    tk.Label(
+        janela,
+        text="Fila:"
+    ).pack()
+
+    fila_var = tk.IntVar(value=0)
+
+    tk.OptionMenu(
+        janela,
+        fila_var,
+        *range(NUM_FILAS)
+    ).pack(pady=5)
+
+
+    tk.Label(
+        janela,
+        text="Lugar:"
+    ).pack()
+
+    lugar_var = tk.IntVar(value=0)
+
+    tk.OptionMenu(
+        janela,
+        lugar_var,
+        *range(LUGARES_POR_FILA)
+    ).pack(pady=5)
+
+
+    def reservar():
+
+        sala = sala_var.get()
+        fila = fila_var.get()
+        lugar = lugar_var.get()
+
+        try:
+
+            conexao = conectar_banco()
+            cursor = conexao.cursor()
+
+            cursor.execute(
+                """
+                SELECT id_assento
+                FROM assento
+                WHERE id_sala = %s
+                AND fila = %s
+                AND lugar = %s
+                """,
+                (sala, fila, lugar)
+            )
+
+            resultado = cursor.fetchone()
+
+            if resultado is None:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Assento não encontrado!"
+                )
+
+                cursor.close()
+                conexao.close()
+
+                return
+
+            id_assento = resultado[0]
+
+            cursor.execute(
+                """
+                SELECT id_reserva
+                FROM reserva
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+            reserva_existente = cursor.fetchone()
+
+            if reserva_existente:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Esse lugar já está reservado!"
+                )
+
+            else:
+
+                cursor.execute(
+                    """
+                    INSERT INTO reserva (id_assento)
+                    VALUES (%s)
+                    """,
+                    (id_assento,)
+                )
+
+                conexao.commit()
+
+                messagebox.showinfo(
+                    "Sucesso",
+                    "Lugar reservado com sucesso!"
+                )
+
+            cursor.close()
+            conexao.close()
+
+        except Exception as erro:
+
+            messagebox.showerror(
+                "Erro",
+                f"Erro ao reservar:\n{erro}"
+            )
+
+
+    tk.Button(
+        janela,
+        text="Reservar",
+        width=20,
+        command=reservar
+    ).pack(pady=20)
+
+def abrir_cancelar():
+
+    janela = tk.Toplevel(root)
+
+    janela.title("Cancelar Reserva")
+    janela.geometry("400x450")
+
+    tk.Label(
+        janela,
+        text="Cancelar Reserva",
+        font=("Arial", 18, "bold")
+    ).pack(pady=15)
+
+
+    tk.Label(
+        janela,
+        text="Sala:"
+    ).pack()
+
+    sala_var = tk.IntVar(value=1)
+
+    tk.OptionMenu(
+        janela,
+        sala_var,
+        *range(1, NUM_SALAS + 1)
+    ).pack(pady=5)
+
+
+    tk.Label(
+        janela,
+        text="Fila:"
+    ).pack()
+
+    fila_var = tk.IntVar(value=0)
+
+    tk.OptionMenu(
+        janela,
+        fila_var,
+        *range(NUM_FILAS)
+    ).pack(pady=5)
+
+
+    tk.Label(
+        janela,
+        text="Lugar:"
+    ).pack()
+
+    lugar_var = tk.IntVar(value=0)
+
+    tk.OptionMenu(
+        janela,
+        lugar_var,
+        *range(LUGARES_POR_FILA)
+    ).pack(pady=5)
+
+
+    def cancelar():
+
+        sala = sala_var.get()
+        fila = fila_var.get()
+        lugar = lugar_var.get()
+
+        try:
+
+            conexao = conectar_banco()
+            cursor = conexao.cursor()
+
+            cursor.execute(
+                """
+                SELECT id_assento
+                FROM assento
+                WHERE id_sala = %s
+                AND fila = %s
+                AND lugar = %s
+                """,
+                (sala, fila, lugar)
+            )
+
+            resultado = cursor.fetchone()
+
+            if resultado is None:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Assento não encontrado!"
+                )
+
+                cursor.close()
+                conexao.close()
+
+                return
+
+            id_assento = resultado[0]
+
+            cursor.execute(
+                """
+                DELETE FROM reserva
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+            if cursor.rowcount > 0:
+
+                conexao.commit()
+
+                messagebox.showinfo(
+                    "Sucesso",
+                    "Reserva cancelada!"
+                )
+
+            else:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Esse lugar não está reservado!"
+                )
+
+
+            cursor.close()
+            conexao.close()
+
+        except Exception as erro:
+
+            messagebox.showerror(
+                "Erro",
+                f"Erro ao cancelar:\n{erro}"
+            )
+
+
+    tk.Button(
+        janela,
+        text="Cancelar reserva",
+        width=20,
+        command=cancelar
+    ).pack(pady=20)
+
+
+
+root = tk.Tk()
+
+root.title("Gerenciador de Teatro/Cinema")
+root.geometry("500x500")
+
+
+tk.Label(
+    root,
+    text="CINEMA",
+    font=("Arial", 24, "bold")
+).pack(pady=30)
+
+
+tk.Button(
+    root,
+    text="1 - Mostrar sala",
+    width=25,
+    height=2,
+    command=abrir_mostrar_sala
+).pack(pady=5)
+
+
+tk.Button(
+    root,
+    text="2 - Reservar lugar",
+    width=25,
+    height=2,
+    command=abrir_reservar
+).pack(pady=5)
+
+
+tk.Button(
+    root,
+    text="3 - Cancelar reserva",
+    width=25,
+    height=2,
+    command=abrir_cancelar
+).pack(pady=5)
+
+
+tk.Button(
+    root,
+    text="4 - Fechar programa",
+    width=25,
+    height=2,
+    command=root.destroy
+).pack(pady=5)
+
+
+root.mainloop()
