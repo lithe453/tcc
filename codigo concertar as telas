@@ -1,0 +1,973 @@
+import customtkinter as ctk
+from tkinter import messagebox
+import psycopg2
+from PIL import Image, ImageTk
+
+
+# ============================================================
+# CONFIGURAÇÕES
+# ============================================================
+
+NUM_SALAS = 3
+NUM_FILAS = 10
+LUGARES_POR_FILA = 20
+
+
+CARTAZES = {
+    1: "Homem-Aranha.png",
+    2: "odisseia.png",
+    3: "toy-story.png"
+}
+
+
+FILMES = {
+    1: "Homem-Aranha: Brand New Day",
+    2: "The Odyssey",
+    3: "Toy Story 5"
+}
+
+
+# ============================================================
+# VARIÁVEL DA JANELA ATUAL
+# ============================================================
+
+janela_atual = None
+
+
+# ============================================================
+# CONEXÃO COM O BANCO
+# ============================================================
+
+def conectar_banco():
+
+    return psycopg2.connect(
+        host="localhost",
+        user="postgres",
+        password="root",
+        port="5432",
+        dbname="cinema"
+    )
+
+
+# ============================================================
+# FECHAR JANELA ANTERIOR
+# ============================================================
+
+def fechar_janela_anterior():
+
+    global janela_atual
+
+    if janela_atual is not None:
+
+        try:
+
+            if janela_atual.winfo_exists():
+
+                janela_atual.destroy()
+
+        except:
+
+            pass
+
+        janela_atual = None
+
+
+# ============================================================
+# TESTE DE CONEXÃO
+# ============================================================
+
+try:
+
+    conexao = conectar_banco()
+
+    print("CONEXÃO COM O BANCO FUNCIONOU!")
+
+    conexao.close()
+
+except Exception as erro:
+
+    print("ERRO AO CONECTAR:")
+    print(erro)
+
+
+# ============================================================
+# MOSTRAR SALAS
+# ============================================================
+
+def abrir_mostrar_sala():
+
+    global janela_atual
+
+    fechar_janela_anterior()
+
+    janela = ctk.CTkToplevel(root)
+
+    janela_atual = janela
+
+    janela.title("Mostrar Sala")
+    janela.geometry("400x350")
+
+
+    ctk.CTkLabel(
+        janela,
+        text="Escolha uma sala:",
+        font=("Arial", 16, "bold")
+    ).pack(pady=20)
+
+
+    for i in range(NUM_SALAS):
+
+        ctk.CTkButton(
+            janela,
+            text=f"Sala {i + 1} - {FILMES[i + 1]}",
+            width=250,
+            command=lambda sala=i: mostrar_sala_gui(sala)
+        ).pack(pady=5)
+
+
+# ============================================================
+# MOSTRAR SALA
+# ============================================================
+
+def mostrar_sala_gui(numero_sala):
+
+    global janela_atual
+
+    # Guarda a janela de escolha
+    janela_escolha = janela_atual
+
+    # Fecha a janela "Escolha uma sala"
+    if janela_escolha is not None:
+
+        try:
+
+            if janela_escolha.winfo_exists():
+
+                janela_escolha.destroy()
+
+        except:
+
+            pass
+
+
+    janela_atual = None
+
+
+    numero = numero_sala + 1
+
+    janela = ctk.CTkToplevel(root)
+
+    janela_atual = janela
+
+    janela.title(f"Sala {numero} - {FILMES[numero]}")
+    janela.geometry("1400x900")
+
+
+    # ========================================================
+    # TÍTULO
+    # ========================================================
+
+    ctk.CTkLabel(
+        janela,
+        text=f"SALA {numero}",
+        font=("Arial", 22, "bold")
+    ).pack(pady=(10, 2))
+
+
+    ctk.CTkLabel(
+        janela,
+        text=FILMES[numero],
+        font=("Arial", 16)
+    ).pack(pady=(0, 5))
+
+
+    # ========================================================
+    # CARTAZ
+    # ========================================================
+
+    try:
+
+        imagem = Image.open(CARTAZES[numero])
+
+        imagem.thumbnail((180, 250))
+
+        poster = ImageTk.PhotoImage(imagem)
+
+        label_cartaz = ctk.CTkLabel(
+            janela,
+            image=poster,
+            text=""
+        )
+
+        label_cartaz.pack(pady=5)
+
+        janela.poster_img = poster
+
+    except Exception as erro:
+
+        ctk.CTkLabel(
+            janela,
+            text=f"Não foi possível carregar o cartaz.\n{erro}",
+            text_color="red"
+        ).pack(pady=20)
+
+
+    # ========================================================
+    # BUSCAR ASSENTOS
+    # ========================================================
+
+    try:
+
+        conexao = conectar_banco()
+
+        cursor = conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                a.fila,
+                a.lugar,
+                CASE
+                    WHEN r.id_reserva IS NULL THEN 0
+                    ELSE 1
+                END AS reservado
+
+            FROM assento a
+
+            LEFT JOIN reserva r
+                ON a.id_assento = r.id_assento
+
+            WHERE a.id_sala = %s
+
+            ORDER BY a.fila, a.lugar
+            """,
+            (numero,)
+        )
+
+        assentos = cursor.fetchall()
+
+        cursor.close()
+        conexao.close()
+
+    except Exception as erro:
+
+        messagebox.showerror(
+            "Erro",
+            f"Erro ao acessar o banco:\n{erro}"
+        )
+
+        return
+
+
+    # ========================================================
+    # ÁREA DA SALA
+    # ========================================================
+
+    sala_frame = ctk.CTkFrame(janela)
+
+    sala_frame.pack(pady=10)
+
+
+    # ========================================================
+    # TELA
+    # ========================================================
+
+    tela = ctk.CTkLabel(
+        sala_frame,
+        text="TELA",
+        fg_color="black",
+        text_color="white",
+        font=("Arial", 16, "bold"),
+        width=1000,
+        height=45
+    )
+
+    tela.grid(
+        row=0,
+        column=0,
+        columnspan=LUGARES_POR_FILA + 1,
+        pady=(10, 25)
+    )
+
+
+    # ========================================================
+    # NÚMEROS DOS LUGARES
+    # ========================================================
+
+    ctk.CTkLabel(
+        sala_frame,
+        text="",
+        width=60
+    ).grid(
+        row=1,
+        column=0
+    )
+
+
+    for lugar in range(LUGARES_POR_FILA):
+
+        ctk.CTkLabel(
+            sala_frame,
+            text=str(lugar + 1),
+            width=35,
+            font=("Arial", 10, "bold")
+        ).grid(
+            row=1,
+            column=lugar + 1,
+            padx=2,
+            pady=5
+        )
+
+
+    # ========================================================
+    # CADEIRAS
+    # ========================================================
+
+    for fila, lugar, reservado in assentos:
+
+        if reservado == 0:
+
+            cor = "green"
+            texto = "●"
+
+        else:
+
+            cor = "red"
+            texto = "X"
+
+
+        cadeira = ctk.CTkLabel(
+            sala_frame,
+            text=texto,
+            width=35,
+            height=30,
+            fg_color=cor,
+            text_color="white",
+            font=("Arial", 11, "bold"),
+            corner_radius=5
+        )
+
+        cadeira.grid(
+            row=fila + 2,
+            column=lugar + 1,
+            padx=3,
+            pady=3
+        )
+
+
+    # ========================================================
+    # NÚMERO DAS FILAS
+    # ========================================================
+
+    for fila in range(NUM_FILAS):
+
+        ctk.CTkLabel(
+            sala_frame,
+            text=f"Fila {fila + 1}",
+            width=60,
+            font=("Arial", 9, "bold")
+        ).grid(
+            row=fila + 2,
+            column=0,
+            padx=5,
+            pady=3
+        )
+
+
+    # ========================================================
+    # LEGENDA
+    # ========================================================
+
+    legenda = ctk.CTkFrame(janela)
+
+    legenda.pack(pady=15)
+
+
+    ctk.CTkLabel(
+        legenda,
+        text="  ● LIVRE  ",
+        fg_color="green",
+        text_color="white",
+        font=("Arial", 11, "bold"),
+        corner_radius=5
+    ).pack(
+        side="left",
+        padx=10
+    )
+
+
+    ctk.CTkLabel(
+        legenda,
+        text="  X RESERVADO  ",
+        fg_color="red",
+        text_color="white",
+        font=("Arial", 11, "bold"),
+        corner_radius=5
+    ).pack(
+        side="left",
+        padx=10
+    )
+
+
+# ============================================================
+# RESERVAR
+# ============================================================
+
+def abrir_reservar():
+
+    global janela_atual
+
+    fechar_janela_anterior()
+
+    janela = ctk.CTkToplevel(root)
+
+    janela_atual = janela
+
+    janela.title("Reservar Lugar")
+    janela.geometry("400x450")
+
+
+    # ========================================================
+    # TÍTULO
+    # ========================================================
+
+    ctk.CTkLabel(
+        janela,
+        text="Reservar Lugar",
+        font=("Arial", 18, "bold")
+    ).pack(pady=15)
+
+
+    # ========================================================
+    # SALA
+    # ========================================================
+
+    ctk.CTkLabel(
+        janela,
+        text="Sala:"
+    ).pack()
+
+
+    sala_var = ctk.StringVar(value="1")
+
+
+    ctk.CTkOptionMenu(
+        janela,
+        variable=sala_var,
+        values=[
+            str(i)
+            for i in range(1, NUM_SALAS + 1)
+        ]
+    ).pack(pady=5)
+
+
+    # ========================================================
+    # FILA
+    # ========================================================
+
+    ctk.CTkLabel(
+        janela,
+        text="Fila:"
+    ).pack()
+
+
+    fila_var = ctk.StringVar(value="0")
+
+
+    ctk.CTkOptionMenu(
+        janela,
+        variable=fila_var,
+        values=[
+            str(i)
+            for i in range(NUM_FILAS)
+        ]
+    ).pack(pady=5)
+
+
+    # ========================================================
+    # LUGAR
+    # ========================================================
+
+    ctk.CTkLabel(
+        janela,
+        text="Lugar:"
+    ).pack()
+
+
+    lugar_var = ctk.StringVar(value="0")
+
+
+    ctk.CTkOptionMenu(
+        janela,
+        variable=lugar_var,
+        values=[
+            str(i)
+            for i in range(LUGARES_POR_FILA)
+        ]
+    ).pack(pady=5)
+
+
+    # ========================================================
+    # RESERVAR
+    # ========================================================
+
+    def reservar():
+
+        sala = int(sala_var.get())
+        fila = int(fila_var.get())
+        lugar = int(lugar_var.get())
+
+        conexao = None
+        cursor = None
+
+        try:
+
+            conexao = conectar_banco()
+
+            cursor = conexao.cursor()
+
+
+            # Procurar assento
+
+            cursor.execute(
+                """
+                SELECT id_assento
+                FROM assento
+                WHERE id_sala = %s
+                AND fila = %s
+                AND lugar = %s
+                """,
+                (
+                    sala,
+                    fila,
+                    lugar
+                )
+            )
+
+
+            resultado = cursor.fetchone()
+
+
+            if resultado is None:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Assento não encontrado!"
+                )
+
+                return
+
+
+            id_assento = resultado[0]
+
+
+            # Verificar reserva
+
+            cursor.execute(
+                """
+                SELECT id_reserva
+                FROM reserva
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+
+            reserva_existente = cursor.fetchone()
+
+
+            if reserva_existente:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Esse lugar já está reservado!"
+                )
+
+                return
+
+
+            # Fazer reserva
+
+            cursor.execute(
+                """
+                INSERT INTO reserva (id_assento)
+                VALUES (%s)
+                """,
+                (id_assento,)
+            )
+
+
+            conexao.commit()
+
+
+            messagebox.showinfo(
+                "Sucesso",
+                "Lugar reservado com sucesso!"
+            )
+
+
+            # Limpar campos
+
+            sala_var.set("1")
+            fila_var.set("0")
+            lugar_var.set("0")
+
+
+        except Exception as erro:
+
+            if conexao:
+
+                conexao.rollback()
+
+
+            messagebox.showerror(
+                "Erro",
+                f"Erro ao reservar:\n{erro}"
+            )
+
+
+        finally:
+
+            if cursor:
+
+                cursor.close()
+
+            if conexao:
+
+                conexao.close()
+
+
+    # ========================================================
+    # BOTÃO
+    # ========================================================
+
+    ctk.CTkButton(
+        janela,
+        text="Reservar",
+        width=150,
+        height=40,
+        command=reservar
+    ).pack(pady=20)
+
+
+# ============================================================
+# CANCELAR
+# ============================================================
+
+def abrir_cancelar():
+
+    global janela_atual
+
+    fechar_janela_anterior()
+
+    janela = ctk.CTkToplevel(root)
+
+    janela_atual = janela
+
+    janela.title("Cancelar Reserva")
+    janela.geometry("400x450")
+
+
+    # ========================================================
+    # TÍTULO
+    # ========================================================
+
+    ctk.CTkLabel(
+        janela,
+        text="Cancelar Reserva",
+        font=("Arial", 18, "bold")
+    ).pack(pady=15)
+
+
+    # ========================================================
+    # SALA
+    # ========================================================
+
+    ctk.CTkLabel(
+        janela,
+        text="Sala:"
+    ).pack()
+
+
+    sala_var = ctk.StringVar(value="1")
+
+
+    ctk.CTkOptionMenu(
+        janela,
+        variable=sala_var,
+        values=[
+            str(i)
+            for i in range(1, NUM_SALAS + 1)
+        ]
+    ).pack(pady=5)
+
+
+    # ========================================================
+    # FILA
+    # ========================================================
+
+    ctk.CTkLabel(
+        janela,
+        text="Fila:"
+    ).pack()
+
+
+    fila_var = ctk.StringVar(value="0")
+
+
+    ctk.CTkOptionMenu(
+        janela,
+        variable=fila_var,
+        values=[
+            str(i)
+            for i in range(NUM_FILAS)
+        ]
+    ).pack(pady=5)
+
+
+    # ========================================================
+    # LUGAR
+    # ========================================================
+
+    ctk.CTkLabel(
+        janela,
+        text="Lugar:"
+    ).pack()
+
+
+    lugar_var = ctk.StringVar(value="0")
+
+
+    ctk.CTkOptionMenu(
+        janela,
+        variable=lugar_var,
+        values=[
+            str(i)
+            for i in range(LUGARES_POR_FILA)
+        ]
+    ).pack(pady=5)
+
+
+    # ========================================================
+    # CANCELAR
+    # ========================================================
+
+    def cancelar():
+
+        sala = int(sala_var.get())
+        fila = int(fila_var.get())
+        lugar = int(lugar_var.get())
+
+        conexao = None
+        cursor = None
+
+        try:
+
+            conexao = conectar_banco()
+
+            cursor = conexao.cursor()
+
+
+            # Procurar assento
+
+            cursor.execute(
+                """
+                SELECT id_assento
+                FROM assento
+                WHERE id_sala = %s
+                AND fila = %s
+                AND lugar = %s
+                """,
+                (
+                    sala,
+                    fila,
+                    lugar
+                )
+            )
+
+
+            resultado = cursor.fetchone()
+
+
+            if resultado is None:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Assento não encontrado!"
+                )
+
+                return
+
+
+            id_assento = resultado[0]
+
+
+            # Verificar reserva
+
+            cursor.execute(
+                """
+                SELECT id_reserva
+                FROM reserva
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+
+            reserva = cursor.fetchone()
+
+
+            if reserva is None:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Esse lugar não está reservado!"
+                )
+
+                return
+
+
+            # Cancelar reserva
+
+            cursor.execute(
+                """
+                DELETE FROM reserva
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+
+            conexao.commit()
+
+
+            messagebox.showinfo(
+                "Sucesso",
+                "Reserva cancelada com sucesso!"
+            )
+
+
+            # Limpar campos
+
+            sala_var.set("1")
+            fila_var.set("0")
+            lugar_var.set("0")
+
+
+        except Exception as erro:
+
+            if conexao:
+
+                conexao.rollback()
+
+
+            messagebox.showerror(
+                "Erro",
+                f"Erro ao cancelar:\n{erro}"
+            )
+
+
+        finally:
+
+            if cursor:
+
+                cursor.close()
+
+            if conexao:
+
+                conexao.close()
+
+
+    # ========================================================
+    # BOTÃO
+    # ========================================================
+
+    ctk.CTkButton(
+        janela,
+        text="Cancelar reserva",
+        width=150,
+        height=40,
+        command=cancelar
+    ).pack(pady=20)
+
+
+# ============================================================
+# JANELA PRINCIPAL
+# ============================================================
+
+root = ctk.CTk()
+
+
+root.title("Gerenciador de Teatro/Cinema")
+
+root.geometry("500x500")
+
+
+# ============================================================
+# TÍTULO
+# ============================================================
+
+ctk.CTkLabel(
+    root,
+    text="CINEMA",
+    font=("Arial", 24, "bold")
+).pack(pady=30)
+
+
+# ============================================================
+# MOSTRAR SALA
+# ============================================================
+
+ctk.CTkButton(
+    root,
+    text="1 - Mostrar sala",
+    width=250,
+    height=40,
+    command=abrir_mostrar_sala
+).pack(pady=5)
+
+
+# ============================================================
+# RESERVAR
+# ============================================================
+
+ctk.CTkButton(
+    root,
+    text="2 - Reservar lugar",
+    width=250,
+    height=40,
+    command=abrir_reservar
+).pack(pady=5)
+
+
+# ============================================================
+# CANCELAR
+# ============================================================
+
+ctk.CTkButton(
+    root,
+    text="3 - Cancelar reserva",
+    width=250,
+    height=40,
+    command=abrir_cancelar
+).pack(pady=5)
+
+
+# ============================================================
+# FECHAR PROGRAMA
+# ============================================================
+
+ctk.CTkButton(
+    root,
+    text="4 - Fechar programa",
+    width=250,
+    height=40,
+    command=root.destroy
+).pack(pady=5)
+
+
+# ============================================================
+# INICIAR
+# ============================================================
+
+root.mainloop()
