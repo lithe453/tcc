@@ -1,0 +1,1191 @@
+import customtkinter as ctk
+from tkinter import messagebox
+import psycopg2
+from PIL import Image, ImageTk
+
+
+# ============================================================
+# CONFIGURAÇÕES
+# ============================================================
+
+NUM_SALAS = 3
+NUM_FILAS = 10
+LUGARES_POR_FILA = 20
+
+CARTAZES = {
+    1: "Homem-Aranha.png",
+    2: "odisseia.png",
+    3: "toy-story.png"
+}
+
+FILMES = {
+    1: "Homem-Aranha: Brand New Day",
+    2: "The Odyssey",
+    3: "Toy Story 5"
+}
+
+
+# ============================================================
+# CONEXÃO COM O BANCO
+# ============================================================
+
+def conectar_banco():
+
+    return psycopg2.connect(
+        host="localhost",
+        user="postgres",
+        password="root",
+        port="5432",
+        dbname="cinema"
+    )
+
+
+# ============================================================
+# TESTAR CONEXÃO
+# ============================================================
+
+try:
+
+    conexao = conectar_banco()
+
+    print("CONEXÃO COM O BANCO FUNCIONOU!")
+
+    conexao.close()
+
+except Exception as erro:
+
+    print("ERRO AO CONECTAR:")
+    print(erro)
+
+
+# ============================================================
+# JANELA PRINCIPAL
+# ============================================================
+
+root = ctk.CTk()
+
+root.title("Gerenciador de Cinema")
+
+root.geometry("1400x850")
+
+root.minsize(1000, 700)
+
+
+# ============================================================
+# FRAME PRINCIPAL
+# ============================================================
+
+frame_principal = ctk.CTkFrame(
+    root
+)
+
+frame_principal.pack(
+    fill="both",
+    expand=True
+)
+
+
+# ============================================================
+# MENU LATERAL
+# ============================================================
+
+menu = ctk.CTkFrame(
+    frame_principal,
+    width=250,
+    corner_radius=0
+)
+
+menu.pack(
+    side="left",
+    fill="y"
+)
+
+menu.pack_propagate(False)
+
+
+# ============================================================
+# ÁREA DE CONTEÚDO
+# ============================================================
+
+conteudo = ctk.CTkFrame(
+    frame_principal,
+    corner_radius=0
+)
+
+conteudo.pack(
+    side="right",
+    fill="both",
+    expand=True
+)
+
+
+# ============================================================
+# LIMPAR CONTEÚDO
+# ============================================================
+
+def limpar_conteudo():
+
+    for widget in conteudo.winfo_children():
+
+        widget.destroy()
+
+
+# ============================================================
+# PÁGINA INICIAL
+# ============================================================
+
+def mostrar_inicio():
+
+    limpar_conteudo()
+
+    ctk.CTkLabel(
+        conteudo,
+        text="🎬 CINEMA",
+        font=("Arial", 36, "bold")
+    ).pack(
+        pady=(100, 20)
+    )
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Gerenciador de Cinema",
+        font=("Arial", 22)
+    ).pack(
+        pady=10
+    )
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Escolha uma opção no menu ao lado.",
+        font=("Arial", 16)
+    ).pack(
+        pady=20
+    )
+
+
+# ============================================================
+# MOSTRAR SALAS
+# ============================================================
+
+def mostrar_salas():
+
+    limpar_conteudo()
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Escolha uma sala",
+        font=("Arial", 28, "bold")
+    ).pack(
+        pady=30
+    )
+
+    for sala in range(
+        1,
+        NUM_SALAS + 1
+    ):
+
+        ctk.CTkButton(
+            conteudo,
+            text=f"Sala {sala} - {FILMES[sala]}",
+            width=450,
+            height=50,
+            font=("Arial", 16),
+            command=lambda s=sala: mostrar_sala(s)
+        ).pack(
+            pady=10
+        )
+
+
+# ============================================================
+# MOSTRAR UMA SALA
+# ============================================================
+
+def mostrar_sala(numero_sala):
+
+    limpar_conteudo()
+
+
+    # --------------------------------------------------------
+    # TÍTULO
+    # --------------------------------------------------------
+
+    ctk.CTkLabel(
+        conteudo,
+        text=f"SALA {numero_sala}",
+        font=("Arial", 28, "bold")
+    ).pack(
+        pady=(10, 2)
+    )
+
+
+    ctk.CTkLabel(
+        conteudo,
+        text=FILMES[numero_sala],
+        font=("Arial", 18)
+    ).pack(
+        pady=(0, 10)
+    )
+
+
+    # --------------------------------------------------------
+    # CARTAZ
+    # --------------------------------------------------------
+
+    try:
+
+        imagem = Image.open(
+            CARTAZES[numero_sala]
+        )
+
+        imagem.thumbnail(
+            (120, 165)
+        )
+
+        poster = ImageTk.PhotoImage(
+            imagem
+        )
+
+        label_cartaz = ctk.CTkLabel(
+            conteudo,
+            image=poster,
+            text=""
+        )
+
+        label_cartaz.pack(
+            pady=5
+        )
+
+        # Mantém a imagem na memória
+        label_cartaz.image = poster
+
+    except Exception as erro:
+
+        ctk.CTkLabel(
+            conteudo,
+            text=f"Cartaz não encontrado:\n{erro}",
+            text_color="red"
+        ).pack(
+            pady=10
+        )
+
+
+    # --------------------------------------------------------
+    # BUSCAR ASSENTOS
+    # --------------------------------------------------------
+
+    try:
+
+        conexao = conectar_banco()
+
+        cursor = conexao.cursor()
+
+
+        cursor.execute(
+            """
+            SELECT
+                a.fila,
+                a.lugar,
+
+                CASE
+                    WHEN r.id_reserva IS NULL THEN 0
+                    ELSE 1
+                END AS reservado
+
+            FROM assento a
+
+            LEFT JOIN reserva r
+                ON a.id_assento = r.id_assento
+
+            WHERE a.id_sala = %s
+
+            ORDER BY a.fila, a.lugar
+            """,
+            (numero_sala,)
+        )
+
+
+        assentos = cursor.fetchall()
+
+
+        cursor.close()
+
+        conexao.close()
+
+
+    except Exception as erro:
+
+        messagebox.showerror(
+            "Erro",
+            f"Erro ao acessar o banco:\n{erro}"
+        )
+
+        return
+
+
+    # --------------------------------------------------------
+    # CONTAINER DA SALA
+    # --------------------------------------------------------
+
+    sala_container = ctk.CTkFrame(
+        conteudo,
+        fg_color="transparent"
+    )
+
+    sala_container.pack(
+        pady=10
+    )
+
+
+    # --------------------------------------------------------
+    # FRAME DA GRADE
+    # --------------------------------------------------------
+
+    sala_frame = ctk.CTkFrame(
+        sala_container
+    )
+
+    sala_frame.pack()
+
+
+    # --------------------------------------------------------
+    # CONFIGURAÇÃO DAS COLUNAS
+    # --------------------------------------------------------
+
+    # Coluna 0 = identificação da fila
+
+    sala_frame.grid_columnconfigure(
+        0,
+        minsize=65
+    )
+
+
+    # Colunas 1 até 20 = lugares
+
+    for coluna in range(
+        1,
+        LUGARES_POR_FILA + 1
+    ):
+
+        sala_frame.grid_columnconfigure(
+            coluna,
+            minsize=38
+        )
+
+
+    # --------------------------------------------------------
+    # TELA
+    # --------------------------------------------------------
+
+    tela = ctk.CTkLabel(
+        sala_frame,
+        text="TELA",
+        fg_color="black",
+        text_color="white",
+        font=("Arial", 14, "bold"),
+        height=38
+    )
+
+    tela.grid(
+        row=0,
+        column=0,
+        columnspan=LUGARES_POR_FILA + 1,
+        sticky="ew",
+        padx=10,
+        pady=(10, 20)
+    )
+
+
+    # --------------------------------------------------------
+    # CANTO SUPERIOR ESQUERDO
+    # --------------------------------------------------------
+
+    ctk.CTkLabel(
+        sala_frame,
+        text="",
+        width=65,
+        height=25
+    ).grid(
+        row=1,
+        column=0
+    )
+
+
+    # --------------------------------------------------------
+    # NÚMEROS DOS LUGARES
+    # --------------------------------------------------------
+
+    for lugar in range(
+        1,
+        LUGARES_POR_FILA + 1
+    ):
+
+        ctk.CTkLabel(
+            sala_frame,
+            text=str(lugar),
+            width=34,
+            height=25,
+            font=("Arial", 10, "bold")
+        ).grid(
+            row=1,
+            column=lugar,
+            padx=2,
+            pady=(0, 5)
+        )
+
+
+    # --------------------------------------------------------
+    # NÚMERO DAS FILAS
+    # --------------------------------------------------------
+
+    for fila in range(
+        1,
+        NUM_FILAS + 1
+    ):
+
+        ctk.CTkLabel(
+            sala_frame,
+            text=f"Fila {fila}",
+            width=65,
+            height=30,
+            font=("Arial", 9, "bold")
+        ).grid(
+            row=fila + 1,
+            column=0,
+            padx=2,
+            pady=2
+        )
+
+
+    # --------------------------------------------------------
+    # CADEIRAS
+    # --------------------------------------------------------
+
+    for fila, lugar, reservado in assentos:
+
+        if reservado == 0:
+
+            cor = "green"
+
+        else:
+
+            cor = "red"
+
+
+        cadeira = ctk.CTkLabel(
+            sala_frame,
+
+            # Número do lugar dentro da cadeira
+            text=str(lugar),
+
+            width=34,
+            height=30,
+
+            fg_color=cor,
+
+            text_color="white",
+
+            font=("Arial", 9, "bold"),
+
+            corner_radius=5
+        )
+
+
+        cadeira.grid(
+            row=fila + 1,
+            column=lugar,
+            padx=2,
+            pady=2
+        )
+
+
+    # --------------------------------------------------------
+    # LEGENDA
+    # --------------------------------------------------------
+
+    legenda = ctk.CTkFrame(
+        conteudo,
+        fg_color="transparent"
+    )
+
+    legenda.pack(
+        pady=12
+    )
+
+
+    ctk.CTkLabel(
+        legenda,
+        text="  LIVRE  ",
+        fg_color="green",
+        text_color="white",
+        font=("Arial", 10, "bold"),
+        corner_radius=5
+    ).pack(
+        side="left",
+        padx=5
+    )
+
+
+    ctk.CTkLabel(
+        legenda,
+        text="  RESERVADO  ",
+        fg_color="red",
+        text_color="white",
+        font=("Arial", 10, "bold"),
+        corner_radius=5
+    ).pack(
+        side="left",
+        padx=5
+    )
+
+
+# ============================================================
+# RESERVAR LUGAR
+# ============================================================
+
+def mostrar_reserva():
+
+    limpar_conteudo()
+
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Reservar Lugar",
+        font=("Arial", 28, "bold")
+    ).pack(
+        pady=30
+    )
+
+
+    # --------------------------------------------------------
+    # SALA
+    # --------------------------------------------------------
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Sala:",
+        font=("Arial", 15)
+    ).pack()
+
+
+    sala_var = ctk.StringVar(
+        value="1"
+    )
+
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=sala_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                NUM_SALAS + 1
+            )
+        ],
+        width=250
+    ).pack(
+        pady=8
+    )
+
+
+    # --------------------------------------------------------
+    # FILA
+    # --------------------------------------------------------
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Fila:",
+        font=("Arial", 15)
+    ).pack()
+
+
+    fila_var = ctk.StringVar(
+        value="1"
+    )
+
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=fila_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                NUM_FILAS + 1
+            )
+        ],
+        width=250
+    ).pack(
+        pady=8
+    )
+
+
+    # --------------------------------------------------------
+    # LUGAR
+    # --------------------------------------------------------
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Lugar:",
+        font=("Arial", 15)
+    ).pack()
+
+
+    lugar_var = ctk.StringVar(
+        value="1"
+    )
+
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=lugar_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                LUGARES_POR_FILA + 1
+            )
+        ],
+        width=250
+    ).pack(
+        pady=8
+    )
+
+
+    # --------------------------------------------------------
+    # FUNÇÃO RESERVAR
+    # --------------------------------------------------------
+
+    def reservar():
+
+        sala = int(
+            sala_var.get()
+        )
+
+        fila = int(
+            fila_var.get()
+        )
+
+        lugar = int(
+            lugar_var.get()
+        )
+
+
+        conexao = None
+
+        cursor = None
+
+
+        try:
+
+            conexao = conectar_banco()
+
+            cursor = conexao.cursor()
+
+
+            # Procurar assento
+
+            cursor.execute(
+                """
+                SELECT id_assento
+
+                FROM assento
+
+                WHERE id_sala = %s
+                AND fila = %s
+                AND lugar = %s
+                """,
+                (
+                    sala,
+                    fila,
+                    lugar
+                )
+            )
+
+
+            resultado = cursor.fetchone()
+
+
+            if resultado is None:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Assento não encontrado!"
+                )
+
+                return
+
+
+            id_assento = resultado[0]
+
+
+            # Verificar reserva
+
+            cursor.execute(
+                """
+                SELECT id_reserva
+
+                FROM reserva
+
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+
+            reserva_existente = cursor.fetchone()
+
+
+            if reserva_existente:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Esse lugar já está reservado!"
+                )
+
+                return
+
+
+            # Fazer reserva
+
+            cursor.execute(
+                """
+                INSERT INTO reserva (
+                    id_assento
+                )
+
+                VALUES (%s)
+                """,
+                (id_assento,)
+            )
+
+
+            conexao.commit()
+
+
+            messagebox.showinfo(
+                "Sucesso",
+                f"Lugar {lugar}, fila {fila}, sala {sala} reservado com sucesso!"
+            )
+
+
+            mostrar_reserva()
+
+
+        except Exception as erro:
+
+            if conexao:
+
+                conexao.rollback()
+
+
+            messagebox.showerror(
+                "Erro",
+                f"Erro ao reservar:\n{erro}"
+            )
+
+
+        finally:
+
+            if cursor:
+
+                cursor.close()
+
+
+            if conexao:
+
+                conexao.close()
+
+
+    # --------------------------------------------------------
+    # BOTÃO
+    # --------------------------------------------------------
+
+    ctk.CTkButton(
+        conteudo,
+        text="Reservar",
+        width=250,
+        height=45,
+        font=("Arial", 15, "bold"),
+        command=reservar
+    ).pack(
+        pady=25
+    )
+
+
+# ============================================================
+# CANCELAR RESERVA
+# ============================================================
+
+def mostrar_cancelamento():
+
+    limpar_conteudo()
+
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Cancelar Reserva",
+        font=("Arial", 28, "bold")
+    ).pack(
+        pady=30
+    )
+
+
+    # --------------------------------------------------------
+    # SALA
+    # --------------------------------------------------------
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Sala:",
+        font=("Arial", 15)
+    ).pack()
+
+
+    sala_var = ctk.StringVar(
+        value="1"
+    )
+
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=sala_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                NUM_SALAS + 1
+            )
+        ],
+        width=250
+    ).pack(
+        pady=8
+    )
+
+
+    # --------------------------------------------------------
+    # FILA
+    # --------------------------------------------------------
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Fila:",
+        font=("Arial", 15)
+    ).pack()
+
+
+    fila_var = ctk.StringVar(
+        value="1"
+    )
+
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=fila_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                NUM_FILAS + 1
+            )
+        ],
+        width=250
+    ).pack(
+        pady=8
+    )
+
+
+    # --------------------------------------------------------
+    # LUGAR
+    # --------------------------------------------------------
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Lugar:",
+        font=("Arial", 15)
+    ).pack()
+
+
+    lugar_var = ctk.StringVar(
+        value="1"
+    )
+
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=lugar_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                LUGARES_POR_FILA + 1
+            )
+        ],
+        width=250
+    ).pack(
+        pady=8
+    )
+
+
+    # --------------------------------------------------------
+    # FUNÇÃO CANCELAR
+    # --------------------------------------------------------
+
+    def cancelar():
+
+        sala = int(
+            sala_var.get()
+        )
+
+        fila = int(
+            fila_var.get()
+        )
+
+        lugar = int(
+            lugar_var.get()
+        )
+
+
+        conexao = None
+
+        cursor = None
+
+
+        try:
+
+            conexao = conectar_banco()
+
+            cursor = conexao.cursor()
+
+
+            # Procurar assento
+
+            cursor.execute(
+                """
+                SELECT id_assento
+
+                FROM assento
+
+                WHERE id_sala = %s
+                AND fila = %s
+                AND lugar = %s
+                """,
+                (
+                    sala,
+                    fila,
+                    lugar
+                )
+            )
+
+
+            resultado = cursor.fetchone()
+
+
+            if resultado is None:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Assento não encontrado!"
+                )
+
+                return
+
+
+            id_assento = resultado[0]
+
+
+            # Verificar reserva
+
+            cursor.execute(
+                """
+                SELECT id_reserva
+
+                FROM reserva
+
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+
+            reserva = cursor.fetchone()
+
+
+            if reserva is None:
+
+                messagebox.showerror(
+                    "Erro",
+                    "Esse lugar não está reservado!"
+                )
+
+                return
+
+
+            # Cancelar reserva
+
+            cursor.execute(
+                """
+                DELETE FROM reserva
+
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+
+            conexao.commit()
+
+
+            messagebox.showinfo(
+                "Sucesso",
+                f"Reserva do lugar {lugar}, fila {fila}, sala {sala} cancelada!"
+            )
+
+
+            mostrar_cancelamento()
+
+
+        except Exception as erro:
+
+            if conexao:
+
+                conexao.rollback()
+
+
+            messagebox.showerror(
+                "Erro",
+                f"Erro ao cancelar:\n{erro}"
+            )
+
+
+        finally:
+
+            if cursor:
+
+                cursor.close()
+
+
+            if conexao:
+
+                conexao.close()
+
+
+    # --------------------------------------------------------
+    # BOTÃO
+    # --------------------------------------------------------
+
+    ctk.CTkButton(
+        conteudo,
+        text="Cancelar reserva",
+        width=250,
+        height=45,
+        font=("Arial", 15, "bold"),
+        command=cancelar
+    ).pack(
+        pady=25
+    )
+
+
+# ============================================================
+# MENU LATERAL
+# ============================================================
+
+ctk.CTkLabel(
+    menu,
+    text="🎬 CINEMA",
+    font=("Arial", 25, "bold")
+).pack(
+    pady=(40, 50)
+)
+
+
+# ============================================================
+# INÍCIO
+# ============================================================
+
+ctk.CTkButton(
+    menu,
+    text="🏠 Início",
+    width=200,
+    height=45,
+    command=mostrar_inicio
+).pack(
+    pady=8
+)
+
+
+# ============================================================
+# MOSTRAR SALA
+# ============================================================
+
+ctk.CTkButton(
+    menu,
+    text="🎬 Mostrar sala",
+    width=200,
+    height=45,
+    command=mostrar_salas
+).pack(
+    pady=8
+)
+
+
+# ============================================================
+# RESERVAR
+# ============================================================
+
+ctk.CTkButton(
+    menu,
+    text="🎟 Reservar lugar",
+    width=200,
+    height=45,
+    command=mostrar_reserva
+).pack(
+    pady=8
+)
+
+
+# ============================================================
+# CANCELAR
+# ============================================================
+
+ctk.CTkButton(
+    menu,
+    text="❌ Cancelar reserva",
+    width=200,
+    height=45,
+    command=mostrar_cancelamento
+).pack(
+    pady=8
+)
+
+
+# ============================================================
+# FECHAR
+# ============================================================
+
+ctk.CTkButton(
+    menu,
+    text="🚪 Fechar programa",
+    width=200,
+    height=45,
+    fg_color="#8B0000",
+    hover_color="#B22222",
+    command=root.destroy
+).pack(
+    side="bottom",
+    pady=40
+)
+
+
+# ============================================================
+# ABRIR NA PÁGINA INICIAL
+# ============================================================
+
+mostrar_inicio()
+
+
+# ============================================================
+# INICIAR PROGRAMA
+# ============================================================
+
+root.mainloop()
