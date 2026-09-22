@@ -1,0 +1,956 @@
+import customtkinter as ctk
+from tkinter import messagebox
+import psycopg2
+from PIL import Image, ImageTk
+
+
+NUM_SALAS = 3
+NUM_FILAS = 10
+LUGARES_POR_FILA = 20
+
+CARTAZES = {
+    1: "Homem-Aranha.png",
+    2: "odisseia.png",
+    3: "toy-story.png"
+}
+
+FILMES = {
+    1: "Homem-Aranha: Brand New Day",
+    2: "The Odyssey",
+    3: "Toy Story 5"
+}
+
+
+def conectar_banco():
+    return psycopg2.connect(
+        host="localhost",
+        user="postgres",
+        password="root",
+        port="5432",
+        dbname="cinema"
+    )
+
+
+try:
+    conexao = conectar_banco()
+    print("CONEXÃO COM O BANCO FUNCIONOU!")
+    conexao.close()
+except Exception as erro:
+    print("ERRO AO CONECTAR:")
+    print(erro)
+
+
+root = ctk.CTk()
+root.title("Gerenciador de Cinema")
+root.geometry("1400x850")
+root.minsize(1100, 750)
+
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+
+frame_principal = ctk.CTkFrame(
+    root,
+    corner_radius=0,
+    fg_color="#627b9d"
+)
+
+frame_principal.pack(
+    fill="both",
+    expand=True
+)
+
+
+menu = ctk.CTkFrame(
+    frame_principal,
+    width=250,
+    corner_radius=0,
+    fg_color="#627b9d"
+)
+
+menu.pack(
+    side="left",
+    fill="y"
+)
+
+menu.pack_propagate(False)
+
+
+conteudo = ctk.CTkFrame(
+    frame_principal,
+    corner_radius=0,
+    fg_color="#002c61"
+)
+
+conteudo.pack(
+    side="right",
+    fill="both",
+    expand=True
+)
+
+
+def limpar_conteudo():
+    for widget in conteudo.winfo_children():
+        widget.destroy()
+
+
+def mostrar_inicio():
+    limpar_conteudo()
+
+    try:
+        imagem_logo = Image.open("Cinesenai.png")
+        imagem_logo.thumbnail((500, 250))
+
+        logo = ImageTk.PhotoImage(imagem_logo)
+
+        label_logo = ctk.CTkLabel(
+            conteudo,
+            image=logo,
+            text=""
+        )
+
+        label_logo.pack(
+            pady=(70, 20)
+        )
+
+        label_logo.image = logo
+
+    except Exception as erro:
+        ctk.CTkLabel(
+            conteudo,
+            text=f"Logo não encontrada:\n{erro}",
+            text_color="#FF6B6B"
+        ).pack(
+            pady=(70, 20)
+        )
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Gerenciador de Cinema",
+        font=("Arial", 22),
+        text_color="#D6E6F5"
+    ).pack(
+        pady=10
+    )
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Escolha uma opção no menu ao lado.",
+        font=("Arial", 16),
+        text_color="#B8CCE0"
+    ).pack(
+        pady=20
+    )
+
+
+def mostrar_salas():
+    limpar_conteudo()
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Escolha uma sala",
+        font=("Arial", 28, "bold"),
+        text_color="#FFFFFF"
+    ).pack(
+        pady=30
+    )
+
+    for sala in range(1, NUM_SALAS + 1):
+        ctk.CTkButton(
+            conteudo,
+            text=f"Sala {sala} - {FILMES[sala]}",
+            width=450,
+            height=50,
+            font=("Arial", 16),
+            fg_color="#28527A",
+            hover_color="#346B9C",
+            command=lambda s=sala: mostrar_sala(s)
+        ).pack(
+            pady=10
+        )
+
+
+def mostrar_sala(numero_sala):
+    limpar_conteudo()
+
+    ctk.CTkLabel(
+        conteudo,
+        text=f"SALA {numero_sala}",
+        font=("Arial", 28, "bold"),
+        text_color="#FFFFFF"
+    ).pack(
+        pady=(15, 2)
+    )
+
+    ctk.CTkLabel(
+        conteudo,
+        text=FILMES[numero_sala],
+        font=("Arial", 18),
+        text_color="#D6E6F5"
+    ).pack(
+        pady=(0, 10)
+    )
+
+    try:
+        imagem = Image.open(
+            CARTAZES[numero_sala]
+        )
+
+        imagem.thumbnail(
+            (110, 150)
+        )
+
+        poster = ImageTk.PhotoImage(
+            imagem
+        )
+
+        label_cartaz = ctk.CTkLabel(
+            conteudo,
+            image=poster,
+            text=""
+        )
+
+        label_cartaz.pack(
+            pady=5
+        )
+
+        label_cartaz.image = poster
+
+    except Exception as erro:
+        ctk.CTkLabel(
+            conteudo,
+            text=f"Cartaz não encontrado:\n{erro}",
+            text_color="#FF6B6B"
+        ).pack(
+            pady=10
+        )
+
+    try:
+        conexao = conectar_banco()
+        cursor = conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                a.fila,
+                a.lugar,
+                CASE
+                    WHEN r.id_reserva IS NULL THEN 0
+                    ELSE 1
+                END AS reservado
+            FROM assento a
+            LEFT JOIN reserva r
+                ON a.id_assento = r.id_assento
+            WHERE a.id_sala = %s
+            ORDER BY a.fila, a.lugar
+            """,
+            (numero_sala,)
+        )
+
+        assentos = cursor.fetchall()
+
+        cursor.close()
+        conexao.close()
+
+    except Exception as erro:
+        messagebox.showerror(
+            "Erro",
+            f"Erro ao acessar o banco:\n{erro}"
+        )
+        return
+
+    area_grade = ctk.CTkFrame(
+        conteudo,
+        fg_color="transparent"
+    )
+
+    area_grade.pack(
+        pady=10
+    )
+
+    sala_frame = ctk.CTkFrame(
+        area_grade,
+        corner_radius=12,
+        fg_color="#1E3A5F"
+    )
+
+    sala_frame.pack(
+        padx=10,
+        pady=5
+    )
+
+    largura_cadeira = 32
+    largura_fila = 75
+    espacamento = 3
+
+    sala_frame.grid_columnconfigure(
+        0,
+        minsize=largura_fila
+    )
+
+    for coluna in range(
+        1,
+        LUGARES_POR_FILA + 1
+    ):
+        sala_frame.grid_columnconfigure(
+            coluna,
+            minsize=largura_cadeira + espacamento * 2
+        )
+
+    tela = ctk.CTkLabel(
+        sala_frame,
+        text="TELA",
+        fg_color="#0F2035",
+        text_color="white",
+        font=("Arial", 14, "bold"),
+        height=35,
+        corner_radius=8
+    )
+
+    tela.grid(
+        row=0,
+        column=0,
+        columnspan=LUGARES_POR_FILA + 1,
+        sticky="ew",
+        padx=15,
+        pady=(15, 18)
+    )
+
+    ctk.CTkLabel(
+        sala_frame,
+        text="",
+        width=largura_fila,
+        height=25,
+        fg_color="transparent"
+    ).grid(
+        row=1,
+        column=0
+    )
+
+    for lugar in range(
+        1,
+        LUGARES_POR_FILA + 1
+    ):
+        ctk.CTkLabel(
+            sala_frame,
+            text=str(lugar),
+            width=largura_cadeira,
+            height=25,
+            font=("Arial", 10, "bold"),
+            anchor="center",
+            text_color="#D6E6F5"
+        ).grid(
+            row=1,
+            column=lugar,
+            padx=espacamento,
+            pady=(0, 5)
+        )
+
+    for fila in range(
+        1,
+        NUM_FILAS + 1
+    ):
+        ctk.CTkLabel(
+            sala_frame,
+            text=f"Fila {fila}",
+            width=largura_fila,
+            height=32,
+            font=("Arial", 9, "bold"),
+            anchor="center",
+            text_color="#D6E6F5"
+        ).grid(
+            row=fila + 1,
+            column=0,
+            padx=3,
+            pady=3
+        )
+
+    for fila, lugar, reservado in assentos:
+
+        fila_visual = fila + 1
+        lugar_visual = lugar + 1
+
+        if (
+            1 <= fila_visual <= NUM_FILAS
+            and 1 <= lugar_visual <= LUGARES_POR_FILA
+        ):
+
+            if reservado == 0:
+                cor = "#2E8B57"
+                texto_cadeira = str(lugar_visual)
+            else:
+                cor = "#B22222"
+                texto_cadeira = "X"
+
+            cadeira = ctk.CTkLabel(
+                sala_frame,
+                text=texto_cadeira,
+                width=largura_cadeira,
+                height=32,
+                fg_color=cor,
+                text_color="white",
+                font=("Arial", 12, "bold"),
+                corner_radius=6,
+                anchor="center"
+            )
+
+            cadeira.grid(
+                row=fila_visual + 1,
+                column=lugar_visual,
+                padx=espacamento,
+                pady=3
+            )
+
+    legenda = ctk.CTkFrame(
+        conteudo,
+        fg_color="transparent"
+    )
+
+    legenda.pack(
+        pady=10
+    )
+
+    ctk.CTkLabel(
+        legenda,
+        text="  LIVRE  ",
+        fg_color="#2E8B57",
+        text_color="white",
+        font=("Arial", 10, "bold"),
+        corner_radius=5
+    ).pack(
+        side="left",
+        padx=5
+    )
+
+    ctk.CTkLabel(
+        legenda,
+        text="  X = RESERVADO  ",
+        fg_color="#B22222",
+        text_color="white",
+        font=("Arial", 10, "bold"),
+        corner_radius=5
+    ).pack(
+        side="left",
+        padx=5
+    )
+
+
+def mostrar_reserva():
+    limpar_conteudo()
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Reservar Lugar",
+        font=("Arial", 28, "bold"),
+        text_color="#FFFFFF"
+    ).pack(
+        pady=30
+    )
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Sala:",
+        font=("Arial", 15),
+        text_color="#D6E6F5"
+    ).pack()
+
+    sala_var = ctk.StringVar(
+        value="1"
+    )
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=sala_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                NUM_SALAS + 1
+            )
+        ],
+        width=250,
+        fg_color="#28527A",
+        button_color="#346B9C",
+        button_hover_color="#407DB0",
+        dropdown_fg_color="#1E3A5F",
+        dropdown_hover_color="#28527A"
+    ).pack(
+        pady=8
+    )
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Fila:",
+        font=("Arial", 15),
+        text_color="#D6E6F5"
+    ).pack()
+
+    fila_var = ctk.StringVar(
+        value="1"
+    )
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=fila_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                NUM_FILAS + 1
+            )
+        ],
+        width=250,
+        fg_color="#28527A",
+        button_color="#346B9C",
+        button_hover_color="#407DB0",
+        dropdown_fg_color="#1E3A5F",
+        dropdown_hover_color="#28527A"
+    ).pack(
+        pady=8
+    )
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Lugar:",
+        font=("Arial", 15),
+        text_color="#D6E6F5"
+    ).pack()
+
+    lugar_var = ctk.StringVar(
+        value="1"
+    )
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=lugar_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                LUGARES_POR_FILA + 1
+            )
+        ],
+        width=250,
+        fg_color="#28527A",
+        button_color="#346B9C",
+        button_hover_color="#407DB0",
+        dropdown_fg_color="#1E3A5F",
+        dropdown_hover_color="#28527A"
+    ).pack(
+        pady=8
+    )
+
+    def reservar():
+
+        sala = int(
+            sala_var.get()
+        )
+
+        fila = int(
+            fila_var.get()
+        ) - 1
+
+        lugar = int(
+            lugar_var.get()
+        ) - 1
+
+        conexao = None
+        cursor = None
+
+        try:
+            conexao = conectar_banco()
+            cursor = conexao.cursor()
+
+            cursor.execute(
+                """
+                SELECT id_assento
+                FROM assento
+                WHERE id_sala = %s
+                AND fila = %s
+                AND lugar = %s
+                """,
+                (
+                    sala,
+                    fila,
+                    lugar
+                )
+            )
+
+            resultado = cursor.fetchone()
+
+            if resultado is None:
+                messagebox.showerror(
+                    "Erro",
+                    "Assento não encontrado!"
+                )
+                return
+
+            id_assento = resultado[0]
+
+            cursor.execute(
+                """
+                SELECT id_reserva
+                FROM reserva
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+            reserva_existente = cursor.fetchone()
+
+            if reserva_existente:
+                messagebox.showerror(
+                    "Erro",
+                    "Esse lugar já está reservado!"
+                )
+                return
+
+            cursor.execute(
+                """
+                INSERT INTO reserva (
+                    id_assento
+                )
+                VALUES (%s)
+                """,
+                (id_assento,)
+            )
+
+            conexao.commit()
+
+            messagebox.showinfo(
+                "Sucesso",
+                f"Lugar {lugar + 1}, fila {fila + 1}, sala {sala} reservado com sucesso!"
+            )
+
+            mostrar_reserva()
+
+        except Exception as erro:
+
+            if conexao:
+                conexao.rollback()
+
+            messagebox.showerror(
+                "Erro",
+                f"Erro ao reservar:\n{erro}"
+            )
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+            if conexao:
+                conexao.close()
+
+    ctk.CTkButton(
+        conteudo,
+        text="Reservar",
+        width=250,
+        height=45,
+        font=("Arial", 15, "bold"),
+        fg_color="#28527A",
+        hover_color="#346B9C",
+        command=reservar
+    ).pack(
+        pady=25
+    )
+
+
+def mostrar_cancelamento():
+    limpar_conteudo()
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Cancelar Reserva",
+        font=("Arial", 28, "bold"),
+        text_color="#FFFFFF"
+    ).pack(
+        pady=30
+    )
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Sala:",
+        font=("Arial", 15),
+        text_color="#D6E6F5"
+    ).pack()
+
+    sala_var = ctk.StringVar(
+        value="1"
+    )
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=sala_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                NUM_SALAS + 1
+            )
+        ],
+        width=250,
+        fg_color="#28527A",
+        button_color="#346B9C",
+        button_hover_color="#407DB0",
+        dropdown_fg_color="#1E3A5F",
+        dropdown_hover_color="#28527A"
+    ).pack(
+        pady=8
+    )
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Fila:",
+        font=("Arial", 15),
+        text_color="#D6E6F5"
+    ).pack()
+
+    fila_var = ctk.StringVar(
+        value="1"
+    )
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=fila_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                NUM_FILAS + 1
+            )
+        ],
+        width=250,
+        fg_color="#28527A",
+        button_color="#346B9C",
+        button_hover_color="#407DB0",
+        dropdown_fg_color="#1E3A5F",
+        dropdown_hover_color="#28527A"
+    ).pack(
+        pady=8
+    )
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Lugar:",
+        font=("Arial", 15),
+        text_color="#D6E6F5"
+    ).pack()
+
+    lugar_var = ctk.StringVar(
+        value="1"
+    )
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=lugar_var,
+        values=[
+            str(i)
+            for i in range(
+                1,
+                LUGARES_POR_FILA + 1
+            )
+        ],
+        width=250,
+        fg_color="#28527A",
+        button_color="#346B9C",
+        button_hover_color="#407DB0",
+        dropdown_fg_color="#1E3A5F",
+        dropdown_hover_color="#28527A"
+    ).pack(
+        pady=8
+    )
+
+    def cancelar():
+
+        sala = int(
+            sala_var.get()
+        )
+
+        fila = int(
+            fila_var.get()
+        ) - 1
+
+        lugar = int(
+            lugar_var.get()
+        ) - 1
+
+        conexao = None
+        cursor = None
+
+        try:
+            conexao = conectar_banco()
+            cursor = conexao.cursor()
+
+            cursor.execute(
+                """
+                SELECT id_assento
+                FROM assento
+                WHERE id_sala = %s
+                AND fila = %s
+                AND lugar = %s
+                """,
+                (
+                    sala,
+                    fila,
+                    lugar
+                )
+            )
+
+            resultado = cursor.fetchone()
+
+            if resultado is None:
+                messagebox.showerror(
+                    "Erro",
+                    "Assento não encontrado!"
+                )
+                return
+
+            id_assento = resultado[0]
+
+            cursor.execute(
+                """
+                SELECT id_reserva
+                FROM reserva
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+            reserva = cursor.fetchone()
+
+            if reserva is None:
+                messagebox.showerror(
+                    "Erro",
+                    "Esse lugar não está reservado!"
+                )
+                return
+
+            cursor.execute(
+                """
+                DELETE FROM reserva
+                WHERE id_assento = %s
+                """,
+                (id_assento,)
+            )
+
+            conexao.commit()
+
+            messagebox.showinfo(
+                "Sucesso",
+                f"Reserva do lugar {lugar + 1}, fila {fila + 1}, sala {sala} cancelada!"
+            )
+
+            mostrar_cancelamento()
+
+        except Exception as erro:
+
+            if conexao:
+                conexao.rollback()
+
+            messagebox.showerror(
+                "Erro",
+                f"Erro ao cancelar:\n{erro}"
+            )
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+            if conexao:
+                conexao.close()
+
+    ctk.CTkButton(
+        conteudo,
+        text="Cancelar reserva",
+        width=250,
+        height=45,
+        font=("Arial", 15, "bold"),
+        fg_color="#28527A",
+        hover_color="#346B9C",
+        command=cancelar
+    ).pack(
+        pady=25
+    )
+
+
+ctk.CTkLabel(
+    menu,
+    text="🎬 CINESENAI",
+    font=("Arial", 25, "bold"),
+    text_color="#FFFFFF"
+).pack(
+    pady=(40, 50)
+)
+
+
+ctk.CTkButton(
+    menu,
+    text="🏠 Início",
+    width=200,
+    height=45,
+    fg_color="#28527A",
+    hover_color="#346B9C",
+    command=mostrar_inicio
+).pack(
+    pady=8
+)
+
+
+ctk.CTkButton(
+    menu,
+    text="🎬 Mostrar sala",
+    width=200,
+    height=45,
+    fg_color="#28527A",
+    hover_color="#346B9C",
+    command=mostrar_salas
+).pack(
+    pady=8
+)
+
+
+ctk.CTkButton(
+    menu,
+    text="🎟 Reservar lugar",
+    width=200,
+    height=45,
+    fg_color="#28527A",
+    hover_color="#346B9C",
+    command=mostrar_reserva
+).pack(
+    pady=8
+)
+
+
+ctk.CTkButton(
+    menu,
+    text="❌ Cancelar reserva",
+    width=200,
+    height=45,
+    fg_color="#28527A",
+    hover_color="#346B9C",
+    command=mostrar_cancelamento
+).pack(
+    pady=8
+)
+
+
+ctk.CTkButton(
+    menu,
+    text="🚪 Fechar programa",
+    width=200,
+    height=45,
+    fg_color="#8B0000",
+    hover_color="#B22222",
+    command=root.destroy
+).pack(
+    side="bottom",
+    pady=40
+)
+
+
+mostrar_inicio()
+
+root.mainloop()
