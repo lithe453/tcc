@@ -41,3 +41,8 @@ conteudo.pack(
     fill="both",
     expand=True
 )
+
+def limpar_conteudo():
+    for widget in conteudo.winfo_children():
+        widget.destroy()
+
