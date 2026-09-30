@@ -1,0 +1,108 @@
+def mostrar_inicio():
+    limpar_conteudo()
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Gerenciador de Cinema",
+        font=("Arial", 28, "bold")
+    ).pack(pady=30)
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Escolha uma opção no menu."
+    ).pack()
+
+def mostrar_salas():
+    limpar_conteudo()
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Escolha uma sala",
+        font=("Arial", 28, "bold")
+    ).pack(pady=25)
+
+    for sala in range(1, NUM_SALAS + 1):
+
+        ctk.CTkLabel(
+            conteudo,
+            text=f"SALA {sala}",
+            font=("Arial", 18, "bold")
+        ).pack(pady=5)
+
+        ctk.CTkButton(
+            conteudo,
+            text=f"Tarde - {FILMES[sala]['Tarde']}",
+            command=lambda s=sala: mostrar_sala(s, "Tarde")
+        ).pack(pady=5)
+
+        ctk.CTkButton(
+            conteudo,
+            text=f"Noite - {FILMES[sala]['Noite']}",
+            command=lambda s=sala: mostrar_sala(s, "Noite")
+        ).pack(pady=5)
+
+def mostrar_sala(numero_sala, periodo):
+    limpar_conteudo()
+
+    ctk.CTkLabel(
+        conteudo,
+        text=f"SALA {numero_sala} - {periodo}",
+        font=("Arial", 24, "bold")
+    ).pack(pady=15)
+
+    ctk.CTkLabel(
+        conteudo,
+        text=FILMES[numero_sala][periodo],
+        font=("Arial", 18)
+    ).pack(pady=5)
+
+    conexao = conectar_banco()
+    cursor = conexao.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            a.fila,
+            a.lugar,
+            CASE
+                WHEN r.id_reserva IS NULL THEN 0
+                ELSE 1
+            END
+        FROM assento a
+        LEFT JOIN reserva r
+            ON a.id_assento = r.id_assento
+        WHERE a.id_sala = %s
+        ORDER BY a.fila, a.lugar
+        """,
+        (numero_sala,)
+    )
+
+    assentos = cursor.fetchall()
+
+    cursor.close()
+    conexao.close()
+
+    grade = ctk.CTkFrame(conteudo)
+    grade.pack(pady=20)
+
+    for fila, lugar, reservado in assentos:
+
+        if reservado == 0:
+            cor = "green"
+            texto = str(lugar + 1)
+        else:
+            cor = "red"
+            texto = "X"
+
+        ctk.CTkLabel(
+            grade,
+            text=texto,
+            width=30,
+            height=30,
+            fg_color=cor
+        ).grid(
+            row=fila,
+            column=lugar,
+            padx=2,
+            pady=2
+        )
