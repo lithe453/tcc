@@ -1,0 +1,859 @@
+import customtkinter as ctk
+from tkinter import messagebox
+import psycopg2
+from PIL import Image, ImageTk
+from tkcalendar import DateEntry
+
+NUM_SALAS = 3
+NUM_FILAS = 10
+LUGARES = 20
+
+FILMES = {
+    1: {"Tarde": "Homem-Aranha: Brand New Day", "Noite": "Vingadores: Doomsday"},
+    2: {"Tarde": "A Odisseia", "Noite": "Obsessão"},
+    3: {"Tarde": "Toy Story 5", "Noite": "Resident Evil"}
+}
+
+CARTAZES = {
+    1: {"Tarde": "Homem-Aranha.png", "Noite": "Avengers_Doomsday.png"},
+    2: {"Tarde": "odisseia.png", "Noite": "Obsession.png"},
+    3: {"Tarde": "toy-story.png", "Noite": "RE.png"}
+}
+
+
+def conectar():
+    return psycopg2.connect(
+        host="localhost",
+        user="postgres",
+        password="root",
+        port="5432",
+        dbname="cinema"
+    )
+
+
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+root = ctk.CTk()
+root.title("Gerenciador de Cinema")
+root.geometry("1400x850")
+root.minsize(1100, 750)
+
+menu = ctk.CTkFrame(root, width=250, fg_color="#627b9d", corner_radius=0)
+menu.pack(side="left", fill="y")
+menu.pack_propagate(False)
+
+conteudo = ctk.CTkFrame(root, fg_color="#002c61", corner_radius=0)
+conteudo.pack(side="right", fill="both", expand=True)
+
+
+def limpar():
+    for widget in conteudo.winfo_children():
+        widget.destroy()
+
+
+def titulo(texto):
+    ctk.CTkLabel(
+        conteudo,
+        text=texto,
+        font=("Arial", 28, "bold"),
+        text_color="white"
+    ).pack(pady=20)
+
+
+def inicio():
+    limpar()
+
+    try:
+        imagem = Image.open("Cinesenai.png")
+        imagem.thumbnail((500, 250))
+        logo = ImageTk.PhotoImage(imagem)
+
+        label = ctk.CTkLabel(conteudo, image=logo, text="")
+        label.image = logo
+        label.pack(pady=(70, 20))
+
+    except:
+        ctk.CTkLabel(
+            conteudo,
+            text="Logo não encontrada",
+            text_color="#FF6B6B"
+        ).pack(pady=70)
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Gerenciador de Cinema",
+        font=("Arial", 22),
+        text_color="#D6E6F5"
+    ).pack(pady=10)
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Escolha uma opção no menu ao lado.",
+        font=("Arial", 16),
+        text_color="#B8CCE0"
+    ).pack(pady=20)
+
+
+def mostrar_salas():
+    limpar()
+    titulo("Escolha uma sala")
+
+    for sala in range(1, NUM_SALAS + 1):
+
+        frame = ctk.CTkFrame(
+            conteudo,
+            fg_color="#1E3A5F",
+            corner_radius=12
+        )
+        frame.pack(pady=10)
+
+        ctk.CTkLabel(
+            frame,
+            text=f"SALA {sala}",
+            font=("Arial", 18, "bold")
+        ).pack(pady=10)
+
+        for periodo, emoji in [("Tarde", "🌞"), ("Noite", "🌙")]:
+            ctk.CTkButton(
+                frame,
+                text=f"{emoji} {periodo} - {FILMES[sala][periodo]}",
+                width=500,
+                height=45,
+                command=lambda s=sala, p=periodo: mostrar_sala(s, p)
+            ).pack(pady=6, padx=20)
+
+        ctk.CTkLabel(frame, text="").pack(pady=3)
+
+
+def mostrar_sala(sala, periodo):
+    limpar()
+
+    titulo(f"SALA {sala} - {periodo.upper()}")
+
+    ctk.CTkLabel(
+        conteudo,
+        text=FILMES[sala][periodo],
+        font=("Arial", 18),
+        text_color="#D6E6F5"
+    ).pack()
+
+    try:
+        imagem = Image.open(CARTAZES[sala][periodo])
+        imagem.thumbnail((110, 150))
+        poster = ImageTk.PhotoImage(imagem)
+
+        label = ctk.CTkLabel(conteudo, image=poster, text="")
+        label.image = poster
+        label.pack(pady=5)
+    except:
+        pass
+
+    try:
+        banco = conectar()
+        cursor = banco.cursor()
+
+        cursor.execute("""
+            SELECT a.fila, a.lugar,
+                   CASE
+                       WHEN r.id_reserva IS NULL THEN 0
+                       ELSE 1
+                   END
+            FROM assento a
+            LEFT JOIN reserva r
+            ON a.id_assento = r.id_assento
+            AND r.turno = %s
+            WHERE a.id_sala = %s
+            ORDER BY a.fila, a.lugar
+        """, (periodo.lower(), sala))
+
+        assentos = cursor.fetchall()
+
+        cursor.close()
+        banco.close()
+
+    except Exception as erro:
+        messagebox.showerror("Erro", str(erro))
+        return
+
+    grade = ctk.CTkFrame(
+        conteudo,
+        fg_color="#1E3A5F",
+        corner_radius=12
+    )
+    grade.pack(pady=10)
+
+    ctk.CTkLabel(
+        grade,
+        text="TELA",
+        fg_color="#0F2035",
+        text_color="white",
+        font=("Arial", 14, "bold"),
+        height=35,
+        corner_radius=8
+    ).grid(
+        row=0,
+        column=0,
+        columnspan=LUGARES + 1,
+        sticky="ew",
+        padx=15,
+        pady=15
+    )
+
+    for lugar in range(1, LUGARES + 1):
+        ctk.CTkLabel(
+            grade,
+            text=str(lugar),
+            width=30,
+            font=("Arial", 9, "bold")
+        ).grid(row=1, column=lugar, padx=2)
+
+    for fila in range(1, NUM_FILAS + 1):
+        ctk.CTkLabel(
+            grade,
+            text=f"Fila {fila}",
+            width=65,
+            font=("Arial", 9, "bold")
+        ).grid(row=fila + 1, column=0, padx=3, pady=3)
+
+    for fila, lugar, reservado in assentos:
+
+        if 0 <= fila < NUM_FILAS and 0 <= lugar < LUGARES:
+
+            cor = "#B22222" if reservado else "#2E8B57"
+            texto = "X" if reservado else str(lugar + 1)
+
+            ctk.CTkLabel(
+                grade,
+                text=texto,
+                width=30,
+                height=30,
+                fg_color=cor,
+                text_color="white",
+                corner_radius=5
+            ).grid(
+                row=fila + 2,
+                column=lugar + 1,
+                padx=2,
+                pady=3
+            )
+
+    legenda = ctk.CTkFrame(
+        conteudo,
+        fg_color="transparent"
+    )
+    legenda.pack(pady=10)
+
+    ctk.CTkLabel(
+        legenda,
+        text="■",
+        text_color="#2E8B57",
+        font=("Arial", 18, "bold")
+    ).pack(side="left")
+
+    ctk.CTkLabel(
+        legenda,
+        text=" Livre",
+        font=("Arial", 12, "bold")
+    ).pack(side="left", padx=(2, 25))
+
+    ctk.CTkLabel(
+        legenda,
+        text="■",
+        text_color="#B22222",
+        font=("Arial", 18, "bold")
+    ).pack(side="left")
+
+    ctk.CTkLabel(
+        legenda,
+        text=" X = Reservado",
+        font=("Arial", 12, "bold")
+    ).pack(side="left", padx=2)
+
+
+def reservar_tela():
+    limpar()
+    titulo("Reservar Lugar")
+
+    ctk.CTkLabel(conteudo, text="Data:").pack()
+
+    calendario = DateEntry(
+        conteudo,
+        width=20,
+        date_pattern="dd/mm/yyyy"
+    )
+    calendario.pack(pady=8)
+
+    ctk.CTkLabel(conteudo, text="Período:").pack()
+
+    periodo = ctk.StringVar(value="Tarde")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=periodo,
+        values=["Tarde", "Noite"]
+    ).pack(pady=8)
+
+    ctk.CTkLabel(conteudo, text="Sala:").pack()
+
+    sala = ctk.StringVar(value="1")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=sala,
+        values=["1", "2", "3"]
+    ).pack(pady=8)
+
+    filme = ctk.CTkLabel(
+        conteudo,
+        text=FILMES[1]["Tarde"],
+        font=("Arial", 14, "bold"),
+        text_color="#9CC9F5"
+    )
+    filme.pack(pady=5)
+
+    def atualizar_filme(*args):
+        filme.configure(
+            text=FILMES[int(sala.get())][periodo.get()]
+        )
+
+    sala.trace_add("write", atualizar_filme)
+    periodo.trace_add("write", atualizar_filme)
+
+    ctk.CTkLabel(conteudo, text="Fila:").pack()
+
+    fila = ctk.StringVar(value="1")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=fila,
+        values=[str(i) for i in range(1, NUM_FILAS + 1)]
+    ).pack(pady=8)
+
+    ctk.CTkLabel(conteudo, text="Lugar:").pack()
+
+    lugar = ctk.StringVar(value="1")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=lugar,
+        values=[str(i) for i in range(1, LUGARES + 1)]
+    ).pack(pady=8)
+
+    def reservar():
+
+        banco = None
+        cursor = None
+
+        try:
+            banco = conectar()
+            cursor = banco.cursor()
+
+            cursor.execute("""
+                SELECT id_assento
+                FROM assento
+                WHERE id_sala = %s
+                AND fila = %s
+                AND lugar = %s
+            """, (
+                int(sala.get()),
+                int(fila.get()) - 1,
+                int(lugar.get()) - 1
+            ))
+
+            resultado = cursor.fetchone()
+
+            if not resultado:
+                messagebox.showerror(
+                    "Erro",
+                    "Assento não encontrado!"
+                )
+                return
+
+            id_assento = resultado[0]
+
+            cursor.execute("""
+                SELECT id_reserva
+                FROM reserva
+                WHERE id_assento = %s
+                AND turno = %s
+            """, (
+                id_assento,
+                periodo.get().lower()
+            ))
+
+            if cursor.fetchone():
+                messagebox.showerror(
+                    "Erro",
+                    "Esse lugar já está reservado para esse período!"
+                )
+                return
+
+            cursor.execute("""
+                INSERT INTO reserva (id_assento, turno)
+                VALUES (%s, %s)
+            """, (
+                id_assento,
+                periodo.get().lower()
+            ))
+
+            banco.commit()
+
+            messagebox.showinfo(
+                "Sucesso",
+                f"Lugar {lugar.get()}, fila {fila.get()}, "
+                f"sala {sala.get()} reservado para {periodo.get()} com sucesso!"
+            )
+
+            reservar_tela()
+
+        except Exception as erro:
+
+            if banco:
+                banco.rollback()
+
+            messagebox.showerror(
+                "Erro",
+                f"Erro ao reservar:\n{erro}"
+            )
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+            if banco:
+                banco.close()
+
+    ctk.CTkButton(
+        conteudo,
+        text="Reservar",
+        width=250,
+        height=45,
+        command=reservar
+    ).pack(pady=20)
+
+
+def cancelar_tela():
+    limpar()
+    titulo("Cancelar Reserva")
+
+    ctk.CTkLabel(conteudo, text="Período:").pack()
+
+    periodo = ctk.StringVar(value="Tarde")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=periodo,
+        values=["Tarde", "Noite"]
+    ).pack(pady=8)
+
+    ctk.CTkLabel(conteudo, text="Sala:").pack()
+
+    sala = ctk.StringVar(value="1")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=sala,
+        values=["1", "2", "3"]
+    ).pack(pady=8)
+
+    ctk.CTkLabel(conteudo, text="Fila:").pack()
+
+    fila = ctk.StringVar(value="1")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=fila,
+        values=[str(i) for i in range(1, NUM_FILAS + 1)]
+    ).pack(pady=8)
+
+    ctk.CTkLabel(conteudo, text="Lugar:").pack()
+
+    lugar = ctk.StringVar(value="1")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=lugar,
+        values=[str(i) for i in range(1, LUGARES + 1)]
+    ).pack(pady=8)
+
+    def cancelar():
+
+        banco = None
+        cursor = None
+
+        try:
+            banco = conectar()
+            cursor = banco.cursor()
+
+            cursor.execute("""
+                SELECT id_assento
+                FROM assento
+                WHERE id_sala = %s
+                AND fila = %s
+                AND lugar = %s
+            """, (
+                int(sala.get()),
+                int(fila.get()) - 1,
+                int(lugar.get()) - 1
+            ))
+
+            resultado = cursor.fetchone()
+
+            if not resultado:
+                messagebox.showerror(
+                    "Erro",
+                    "Assento não encontrado!"
+                )
+                return
+
+            id_assento = resultado[0]
+
+            cursor.execute("""
+                SELECT id_reserva
+                FROM reserva
+                WHERE id_assento = %s
+                AND turno = %s
+            """, (
+                id_assento,
+                periodo.get().lower()
+            ))
+
+            if not cursor.fetchone():
+                messagebox.showerror(
+                    "Erro",
+                    "Esse lugar não está reservado para esse período!"
+                )
+                return
+
+            cursor.execute("""
+                DELETE FROM reserva
+                WHERE id_assento = %s
+                AND turno = %s
+            """, (
+                id_assento,
+                periodo.get().lower()
+            ))
+
+            banco.commit()
+
+            messagebox.showinfo(
+                "Sucesso",
+                f"Reserva do lugar {lugar.get()}, "
+                f"fila {fila.get()}, sala {sala.get()} "
+                f"no período da {periodo.get().lower()} cancelada!"
+            )
+
+            cancelar_tela()
+
+        except Exception as erro:
+
+            if banco:
+                banco.rollback()
+
+            messagebox.showerror(
+                "Erro",
+                f"Erro ao cancelar:\n{erro}"
+            )
+
+        finally:
+
+            if cursor:
+                cursor.close()
+
+            if banco:
+                banco.close()
+
+    ctk.CTkButton(
+        conteudo,
+        text="Cancelar reserva",
+        width=250,
+        height=45,
+        fg_color="#8B0000",
+        hover_color="#B22222",
+        command=cancelar
+    ).pack(pady=25)
+
+
+def comprar_tela():
+    limpar()
+    titulo("Comprar Ingressos e Produtos")
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Ingressos",
+        font=("Arial", 20, "bold"),
+        text_color="#D6E6F5"
+    ).pack(pady=(5, 10))
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Período:"
+    ).pack()
+
+    periodo = ctk.StringVar(value="Tarde")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=periodo,
+        values=["Tarde", "Noite"]
+    ).pack(pady=8)
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Quantidade de ingressos:"
+    ).pack()
+
+    quantidade_ingressos = ctk.StringVar(value="1")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=quantidade_ingressos,
+        values=[str(i) for i in range(1, 11)]
+    ).pack(pady=8)
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Pipoca:"
+    ).pack(pady=(15, 5))
+
+    pipoca = ctk.StringVar(value="Nenhuma")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=pipoca,
+        values=[
+            "Nenhuma",
+            "Pipoca pequena",
+            "Pipoca média",
+            "Pipoca grande"
+        ]
+    ).pack(pady=8)
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Quantidade de pipocas:"
+    ).pack()
+
+    quantidade_pipoca = ctk.StringVar(value="0")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=quantidade_pipoca,
+        values=[str(i) for i in range(0, 11)]
+    ).pack(pady=8)
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Refrigerante:"
+    ).pack(pady=(15, 5))
+
+    refrigerante = ctk.StringVar(value="Nenhum")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=refrigerante,
+        values=[
+            "Nenhum",
+            "Coca-Cola",
+            "Guaraná",
+            "Fanta",
+            "Sprite"
+        ]
+    ).pack(pady=8)
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Quantidade de refrigerantes:"
+    ).pack()
+
+    quantidade_refrigerante = ctk.StringVar(value="0")
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=quantidade_refrigerante,
+        values=[str(i) for i in range(0, 11)]
+    ).pack(pady=8)
+
+    total = ctk.CTkLabel(
+        conteudo,
+        text="Total: R$ 20,00",
+        font=("Arial", 20, "bold"),
+        text_color="#9CC9F5"
+    )
+    total.pack(pady=20)
+
+    def calcular_total(*args):
+        if periodo.get() == "Tarde":
+            preco_ingresso = 20.00
+        else:
+            preco_ingresso = 25.00
+
+        quantidade_ingressos_valor = int(quantidade_ingressos.get())
+
+        precos_pipoca = {
+            "Nenhuma": 0.00,
+            "Pipoca pequena": 10.00,
+            "Pipoca média": 15.00,
+            "Pipoca grande": 20.00
+        }
+
+        precos_refrigerante = {
+            "Nenhum": 0.00,
+            "Coca-Cola": 8.00,
+            "Guaraná": 7.00,
+            "Fanta": 7.00,
+            "Sprite": 7.00
+        }
+
+        quantidade_pipoca_valor = int(quantidade_pipoca.get())
+        quantidade_refrigerante_valor = int(quantidade_refrigerante.get())
+
+        preco_pipoca = precos_pipoca[pipoca.get()]
+        preco_refrigerante = precos_refrigerante[refrigerante.get()]
+
+        valor_total = (
+            preco_ingresso * quantidade_ingressos_valor
+            + preco_pipoca * quantidade_pipoca_valor
+            + preco_refrigerante * quantidade_refrigerante_valor
+        )
+
+        total.configure(
+            text=f"Total: R$ {valor_total:.2f}".replace(".", ",")
+        )
+
+    periodo.trace_add("write", calcular_total)
+    quantidade_ingressos.trace_add("write", calcular_total)
+    pipoca.trace_add("write", calcular_total)
+    quantidade_pipoca.trace_add("write", calcular_total)
+    refrigerante.trace_add("write", calcular_total)
+    quantidade_refrigerante.trace_add("write", calcular_total)
+
+    def finalizar_compra():
+        if pipoca.get() == "Nenhuma":
+            quantidade_pipoca.set("0")
+
+        if refrigerante.get() == "Nenhum":
+            quantidade_refrigerante.set("0")
+
+        calcular_total()
+
+        if periodo.get() == "Tarde":
+            preco_ingresso = 20.00
+        else:
+            preco_ingresso = 25.00
+
+        precos_pipoca = {
+            "Nenhuma": 0.00,
+            "Pipoca pequena": 10.00,
+            "Pipoca média": 15.00,
+            "Pipoca grande": 20.00
+        }
+
+        precos_refrigerante = {
+            "Nenhum": 0.00,
+            "Coca-Cola": 8.00,
+            "Guaraná": 7.00,
+            "Fanta": 7.00,
+            "Sprite": 7.00
+        }
+
+        qtd_ingressos = int(quantidade_ingressos.get())
+        qtd_pipocas = int(quantidade_pipoca.get())
+        qtd_refrigerantes = int(quantidade_refrigerante.get())
+
+        valor_total = (
+            preco_ingresso * qtd_ingressos
+            + precos_pipoca[pipoca.get()] * qtd_pipocas
+            + precos_refrigerante[refrigerante.get()] * qtd_refrigerantes
+        )
+
+        messagebox.showinfo(
+            "Compra realizada",
+            f"Compra realizada com sucesso!\n\n"
+            f"Ingressos: {qtd_ingressos}\n"
+            f"Período: {periodo.get()}\n"
+            f"Pipoca: {pipoca.get()}\n"
+            f"Quantidade de pipocas: {qtd_pipocas}\n"
+            f"Refrigerante: {refrigerante.get()}\n"
+            f"Quantidade de refrigerantes: {qtd_refrigerantes}\n\n"
+            f"Total: R$ {valor_total:.2f}".replace(".", ",")
+        )
+
+    ctk.CTkButton(
+        conteudo,
+        text="💳 Finalizar compra",
+        width=250,
+        height=45,
+        command=finalizar_compra
+    ).pack(pady=10)
+
+
+ctk.CTkLabel(
+    menu,
+    text="🎬 CINESENAI",
+    font=("Arial", 25, "bold")
+).pack(pady=(40, 50))
+
+
+ctk.CTkButton(
+    menu,
+    text="🏠 Início",
+    width=200,
+    height=45,
+    command=inicio
+).pack(pady=8)
+
+
+ctk.CTkButton(
+    menu,
+    text="🎬 Mostrar sala",
+    width=200,
+    height=45,
+    command=mostrar_salas
+).pack(pady=8)
+
+
+ctk.CTkButton(
+    menu,
+    text="🎟 Reservar lugar",
+    width=200,
+    height=45,
+    command=reservar_tela
+).pack(pady=8)
+
+
+ctk.CTkButton(
+    menu,
+    text="🛒 Comprar",
+    width=200,
+    height=45,
+    command=comprar_tela
+).pack(pady=8)
+
+
+ctk.CTkButton(
+    menu,
+    text="❌ Cancelar reserva",
+    width=200,
+    height=45,
+    command=cancelar_tela
+).pack(pady=8)
+
+
+ctk.CTkButton(
+    menu,
+    text="🚪 Fechar programa",
+    width=200,
+    height=45,
+    fg_color="#8B0000",
+    hover_color="#B22222",
+    command=root.destroy
+).pack(
+    side="bottom",
+    pady=40
+)
+
+inicio()
+root.mainloop()
