@@ -9,8 +9,8 @@ NUM_FILAS = 10
 LUGARES = 20
 
 FILMES = {
-    1: {"Tarde": "Homem-Aranha: Brand New Day", "Noite": "Avengers: Doomsday"},
-    2: {"Tarde": "The Odyssey", "Noite": "Obsession"},
+    1: {"Tarde": "Homem-Aranha: Brand New Day", "Noite": "Vingadores: Doomsday"},
+    2: {"Tarde": "A Odisseia", "Noite": "Obsessão"},
     3: {"Tarde": "Toy Story 5", "Noite": "Resident Evil"}
 }
 
