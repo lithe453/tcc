@@ -1,0 +1,136 @@
+def mostrar_reserva():
+    limpar_conteudo()
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Reservar Lugar",
+        font=("Arial", 28, "bold")
+    ).pack(pady=20)
+
+    sala_var = ctk.StringVar(value="1")
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Sala:"
+    ).pack()
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=sala_var,
+        values=["1", "2", "3"]
+    ).pack(pady=8)
+
+    periodo_var = ctk.StringVar(value="Tarde")
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Período:"
+    ).pack()
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=periodo_var,
+        values=["Tarde", "Noite"]
+    ).pack(pady=8)
+
+    fila_var = ctk.StringVar(value="1")
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Fila:"
+    ).pack()
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=fila_var,
+        values=[str(i) for i in range(1, 11)]
+    ).pack(pady=8)
+
+    lugar_var = ctk.StringVar(value="1")
+
+    ctk.CTkLabel(
+        conteudo,
+        text="Lugar:"
+    ).pack()
+
+    ctk.CTkOptionMenu(
+        conteudo,
+        variable=lugar_var,
+        values=[str(i) for i in range(1, 21)]
+    ).pack(pady=8)
+
+    def reservar():
+
+        sala = int(sala_var.get())
+        fila = int(fila_var.get()) - 1
+        lugar = int(lugar_var.get()) - 1
+
+        conexao = conectar_banco()
+        cursor = conexao.cursor()
+
+        cursor.execute(
+            """
+            SELECT id_assento
+            FROM assento
+            WHERE id_sala = %s
+            AND fila = %s
+            AND lugar = %s
+            """,
+            (sala, fila, lugar)
+        )
+
+        resultado = cursor.fetchone()
+
+        if resultado is None:
+            messagebox.showerror(
+                "Erro",
+                "Assento não encontrado!"
+            )
+            return
+
+        id_assento = resultado[0]
+
+        cursor.execute(
+            """
+            SELECT id_reserva
+            FROM reserva
+            WHERE id_assento = %s
+            """,
+            (id_assento,)
+        )
+
+        reserva = cursor.fetchone()
+
+        if reserva:
+            messagebox.showerror(
+                "Erro",
+                "Esse lugar já está reservado!"
+            )
+            return
+
+        cursor.execute(
+            """
+            INSERT INTO reserva (id_assento)
+            VALUES (%s)
+            """,
+            (id_assento,)
+        )
+
+        conexao.commit()
+
+        cursor.close()
+        conexao.close()
+
+        messagebox.showinfo(
+            "Sucesso",
+            "Lugar reservado com sucesso!"
+        )
+
+        mostrar_reserva()
+
+
+    ctk.CTkButton(
+        conteudo,
+        text="Reservar",
+        command=reservar
+    ).pack(pady=20)
