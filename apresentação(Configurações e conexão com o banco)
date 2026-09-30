@@ -1,0 +1,36 @@
+import customtkinter as ctk
+from tkinter import messagebox
+import psycopg2
+
+# Configurações do cinema
+NUM_SALAS = 3
+NUM_FILAS = 10
+LUGARES_POR_FILA = 20
+
+
+# Filmes de cada sala
+FILMES = {
+    1: {
+        "Tarde": "Homem-Aranha: Brand New Day",
+        "Noite": "Avengers: Doomsday"
+    },
+    2: {
+        "Tarde": "The Odyssey",
+        "Noite": "Obsession"
+    },
+    3: {
+        "Tarde": "Toy Story 5",
+        "Noite": "Resident Evil"
+    }
+}
+
+
+# Conecta ao PostgreSQL
+def conectar_banco():
+    return psycopg2.connect(
+        host="localhost",
+        user="postgres",
+        password="root",
+        port="5432",
+        dbname="cinema"
+    )
