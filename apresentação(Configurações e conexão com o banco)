@@ -2,7 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 import psycopg2
 
-# Configurações do cinema
+
 NUM_SALAS = 3
 NUM_FILAS = 10
 LUGARES_POR_FILA = 20
