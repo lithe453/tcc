@@ -8,7 +8,6 @@ NUM_FILAS = 10
 LUGARES_POR_FILA = 20
 
 
-# Filmes de cada sala
 FILMES = {
     1: {
         "Tarde": "Homem-Aranha: Brand New Day",
@@ -25,7 +24,6 @@ FILMES = {
 }
 
 
-# Conecta ao PostgreSQL
 def conectar_banco():
     return psycopg2.connect(
         host="localhost",
