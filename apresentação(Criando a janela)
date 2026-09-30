@@ -1,0 +1,43 @@
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+root = ctk.CTk()
+
+root.title("Gerenciador de Cinema")
+root.geometry("1400x850")
+root.minsize(1100, 750)
+
+frame_principal = ctk.CTkFrame(
+    root,
+    corner_radius=0,
+    fg_color="#627b9d"
+)
+
+frame_principal.pack(
+    fill="both",
+    expand=True
+)
+
+menu = ctk.CTkFrame(
+    frame_principal,
+    width=250,
+    corner_radius=0,
+    fg_color="#627b9d"
+)
+
+menu.pack(
+    side="left",
+    fill="y"
+)
+
+conteudo = ctk.CTkFrame(
+    frame_principal,
+    corner_radius=0,
+    fg_color="#002c61"
+)
+
+conteudo.pack(
+    side="right",
+    fill="both",
+    expand=True
+)
