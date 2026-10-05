@@ -1439,7 +1439,7 @@ ctk.CTkButton(
     text="↩️ Cancelar itens",
     width=200,
     height=45,
-    fg_color="#A0522D",
+    fg_color="#CE0000",
     hover_color="#CD5C5C",
     command=cancelar_itens_compra
 ).pack(pady=8)
