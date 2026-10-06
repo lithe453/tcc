@@ -5,10 +5,12 @@ from PIL import Image, ImageTk
 from tkcalendar import DateEntry
 from datetime import datetime
 
+#salas
 NUM_SALAS = 3
 NUM_FILAS = 10
 LUGARES = 20
 
+#filmes e cartazes
 FILMES = {
     1: {"Tarde": "Homem-Aranha: Brand New Day", "Noite": "Vingadores: Doomsday"},
     2: {"Tarde": "A Odisseia", "Noite": "Obsessão"},
@@ -21,10 +23,11 @@ CARTAZES = {
     3: {"Tarde": "toy-story.png", "Noite": "Residente_Ivo.png"}
 }
 
+#histórico de compras e de cancelamentos
 historico_compras_lista = []
 historico_cancelamentos_lista = []
 
-
+#banco de dados
 def conectar():
     return psycopg2.connect(
         host="localhost",
@@ -34,7 +37,7 @@ def conectar():
         dbname="cinema"
     )
 
-
+#configuração da janela
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
@@ -50,12 +53,12 @@ menu.pack_propagate(False)
 conteudo = ctk.CTkFrame(root, fg_color="#002c61", corner_radius=0)
 conteudo.pack(side="right", fill="both", expand=True)
 
-
+#função que limpa as janelas 
 def limpar():
     for widget in conteudo.winfo_children():
         widget.destroy()
 
-
+#título
 def titulo(texto):
     ctk.CTkLabel(
         conteudo,
@@ -64,10 +67,11 @@ def titulo(texto):
         text_color="white"
     ).pack(pady=20)
 
-
+#tela inicial do cinema
 def inicio():
     limpar()
 
+#logo do nosso cinema
     try:
         imagem = Image.open("Cinesenai.png")
         imagem.thumbnail((500, 250))
@@ -77,6 +81,7 @@ def inicio():
         label.image = logo
         label.pack(pady=(70, 20))
 
+#caso a imagem não funcionar
     except:
         ctk.CTkLabel(
             conteudo,
@@ -98,7 +103,7 @@ def inicio():
         text_color="#B8CCE0"
     ).pack(pady=20)
 
-
+#mostra as salas do cinema
 def mostrar_salas():
     limpar()
     titulo("Escolha uma sala")
@@ -129,9 +134,9 @@ def mostrar_salas():
 
         ctk.CTkLabel(frame, text="").pack(pady=3)
 
-
+#mostra uma sala específica
 def mostrar_sala(sala, periodo):
-    limpar()
+    limpar() #limpa a seleção de salas e vai pra sala escolhida 
 
     titulo(f"SALA {sala} - {periodo.upper()}")
 
@@ -142,6 +147,7 @@ def mostrar_sala(sala, periodo):
         text_color="#D6E6F5"
     ).pack()
 
+#tenta abrir os cartazes dos filmes
     try:
         imagem = Image.open(CARTAZES[sala][periodo])
         imagem.thumbnail((110, 150))
@@ -150,12 +156,15 @@ def mostrar_sala(sala, periodo):
         label = ctk.CTkLabel(conteudo, image=poster, text="")
         label.image = poster
         label.pack(pady=5)
+
+#caso os cartazes não existirem
     except:
         pass
 
+#consulta os lugares no banco de dados
     try:
         banco = conectar()
-        cursor = banco.cursor()
+        cursor = banco.cursor() #usado para executar comandos SQL
 
         cursor.execute("""
             SELECT a.fila, a.lugar,
@@ -171,11 +180,12 @@ def mostrar_sala(sala, periodo):
             ORDER BY a.fila, a.lugar
         """, (periodo.lower(), sala))
 
-        assentos = cursor.fetchall()
+        assentos = cursor.fetchall() #pega todos os resultados encontrados no banco
 
         cursor.close()
         banco.close()
 
+#construção da grade de lugares 
     except Exception as erro:
         messagebox.showerror("Erro", str(erro))
         return
@@ -198,10 +208,10 @@ def mostrar_sala(sala, periodo):
     ).grid(
         row=0,
         column=0,
-        columnspan=LUGARES + 1,
-        sticky="ew",
-        padx=15,
-        pady=15
+        columnspan=LUGARES + 1, #faz com que um elemento da tela ocupe duas ou mais colunas de forma horizontal
+        sticky="ew", #serve para alinhar ou esticar um widget dentro da sua célula na grade do gerenciador
+        padx=15, #adiciona um espaço horizontal externo ao redor de um widget
+        pady=15 #adiciona um espaço vertical externo ao redor de um widget
     )
 
     for lugar in range(1, LUGARES + 1):
@@ -220,6 +230,7 @@ def mostrar_sala(sala, periodo):
             font=("Arial", 9, "bold")
         ).grid(row=fila + 1, column=0, padx=3, pady=3)
 
+#lugar livre ou reservado 
     for fila, lugar, reservado in assentos:
 
         if 0 <= fila < NUM_FILAS and 0 <= lugar < LUGARES:
@@ -274,7 +285,7 @@ def mostrar_sala(sala, periodo):
         font=("Arial", 12, "bold")
     ).pack(side="left", padx=2)
 
-
+#reservar lugar
 def reservar_tela():
     limpar()
     titulo("Reservar Lugar")
@@ -290,7 +301,7 @@ def reservar_tela():
 
     ctk.CTkLabel(conteudo, text="Período:").pack()
 
-    periodo = ctk.StringVar(value="Tarde")
+    periodo = ctk.StringVar(value="Tarde") #guarda o valor selecionado
 
     ctk.CTkOptionMenu(
         conteudo,
@@ -316,12 +327,13 @@ def reservar_tela():
     )
     filme.pack(pady=5)
 
+#atualização automática do filme
     def atualizar_filme(*args):
         filme.configure(
             text=FILMES[int(sala.get())][periodo.get()]
         )
 
-    sala.trace_add("write", atualizar_filme)
+    sala.trace_add("write", atualizar_filme) #faz a função ser executada quando o valor muda
     periodo.trace_add("write", atualizar_filme)
 
     ctk.CTkLabel(conteudo, text="Fila:").pack()
@@ -386,6 +398,7 @@ def reservar_tela():
                 periodo.get().lower()
             ))
 
+#verificação de existência
             if cursor.fetchone():
                 messagebox.showerror(
                     "Erro",
