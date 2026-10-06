@@ -941,3 +941,47 @@ mainloop()	Mantém a interface funcionando
 A ideia central é simples: a interface recebe o que o usuário escolhe, as funções processam essas escolhas, o PostgreSQL cuida das reservas de assentos, e as listas Python cuidam dos históricos de compras e cancelamentos durante a execução.
 
 Isso já é o suficiente para você entender a arquitetura do projeto sem precisar tratar cada pack(), pady=8 e font=("Arial", 14) como se fossem segredos ancestrais da programação.
+
+50. inicio() e root.mainloop()
+Sim. Essas duas linhas no final têm funções diferentes:
+
+inicio()
+root.mainloop()
+inicio()
+
+Essa linha chama a função inicio() que você criou anteriormente.
+
+Por exemplo:
+
+def inicio():
+    print("Bem-vindo ao Cinesenai")
+
+Se você escrever:
+
+inicio()
+
+o Python executa tudo que está dentro da função.
+
+No seu projeto, ela serve para abrir/mostrar a tela inicial do cinema assim que o programa começa.
+
+root.mainloop()
+
+Essa é importante para o Tkinter/CustomTkinter.
+
+root.mainloop()
+
+faz o programa ficar rodando e esperando as ações do usuário, como:
+
+clicar nos botões;
+abrir uma tela;
+selecionar uma sala;
+fazer uma reserva;
+fechar a janela.
+
+Sem o mainloop(), a janela poderia simplesmente abrir e o programa terminar logo depois. Porque aparentemente até programas precisam de alguém mandando eles continuarem trabalhando.
+
+Resumindo
+inicio()          # mostra a tela inicial
+root.mainloop()   # mantém o programa aberto funcionando
+
+Então é normal e correto essas duas linhas estarem no final do código.
