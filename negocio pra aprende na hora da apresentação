@@ -1,0 +1,943 @@
+1. Importações
+import customtkinter as ctk
+from tkinter import messagebox
+import psycopg2
+from PIL import Image, ImageTk
+from tkcalendar import DateEntry
+from datetime import datetime
+
+São as bibliotecas utilizadas:
+
+customtkinter: cria a interface gráfica moderna.
+messagebox: mostra mensagens e avisos.
+psycopg2: conecta o Python ao PostgreSQL.
+PIL: permite abrir e mostrar imagens.
+DateEntry: cria o calendário para escolher datas.
+datetime: pega data e hora atuais.
+2. Configurações do cinema
+NUM_SALAS = 3
+NUM_FILAS = 10
+LUGARES = 20
+
+Define:
+
+3 salas
+10 filas por sala
+20 lugares por fila
+
+Então cada sala possui:
+
+10 × 20 = 200 lugares.
+
+3. Filmes
+FILMES = {
+    1: {"Tarde": "...", "Noite": "..."},
+    2: {"Tarde": "...", "Noite": "..."},
+    3: {"Tarde": "...", "Noite": "..."}
+}
+
+É um dicionário.
+
+Ele relaciona:
+
+Sala → período → filme
+
+Por exemplo:
+
+FILMES[1]["Tarde"]
+
+significa:
+
+Filme da sala 1 durante a tarde.
+
+4. Cartazes
+CARTAZES = {
+    1: {"Tarde": "Homem-Aranha.png", ...}
+}
+
+Funciona praticamente igual ao FILMES, mas guarda o nome dos arquivos das imagens dos filmes.
+
+5. Histórico
+historico_compras_lista = []
+historico_cancelamentos_lista = []
+
+São listas vazias.
+
+O programa vai colocando informações dentro delas quando acontece uma compra ou cancelamento.
+
+Importante: esses históricos ficam somente enquanto o programa está aberto. Eles não são salvos no banco de dados.
+
+6. Conexão com PostgreSQL
+def conectar():
+    return psycopg2.connect(
+        host="localhost",
+        user="postgres",
+        password="root",
+        port="5432",
+        dbname="cinema"
+    )
+
+Aqui é criada uma função chamada conectar().
+
+Ela conecta o programa ao banco PostgreSQL.
+
+localhost: banco está no próprio computador.
+postgres: usuário.
+root: senha.
+5432: porta padrão do PostgreSQL.
+cinema: nome do banco.
+
+Sempre que o programa precisa consultar ou modificar reservas, ele chama:
+
+conectar()
+7. Configuração da janela
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+Define:
+
+modo escuro;
+tema azul.
+
+Depois:
+
+root = ctk.CTk()
+root.title("Gerenciador de Cinema")
+root.geometry("1400x850")
+root.minsize(1100, 750)
+
+Cria a janela principal.
+
+root: janela principal.
+title: título.
+geometry: tamanho inicial.
+minsize: tamanho mínimo.
+8. Menu e conteúdo
+
+O programa divide a tela em duas partes:
+
+menu = ctk.CTkFrame(...)
+conteudo = ctk.CTkFrame(...)
+
+O menu fica do lado esquerdo.
+
+O conteudo ocupa o restante da tela.
+
+menu.pack(side="left", fill="y")
+conteudo.pack(side="right", fill="both", expand=True)
+
+Então fica aproximadamente:
+
+┌──────────────┬─────────────────────────┐
+│              │                         │
+│    MENU      │        CONTEÚDO         │
+│              │                         │
+│              │                         │
+└──────────────┴─────────────────────────┘
+9. limpar()
+def limpar():
+    for widget in conteudo.winfo_children():
+        widget.destroy()
+
+Essa função limpa a área de conteúdo.
+
+Ela pega todos os elementos existentes ali e remove.
+
+Isso permite trocar de tela sem abrir várias janelas.
+
+Por exemplo:
+
+Tela inicial
+     ↓
+clicou em Comprar
+     ↓
+limpa a tela
+     ↓
+cria tela de compra
+10. titulo()
+def titulo(texto):
+
+Cria um título dentro da área de conteúdo.
+
+Recebe um texto e coloca ele na tela com fonte maior.
+
+11. Tela inicial
+def inicio():
+    limpar()
+
+Primeiro limpa a tela.
+
+Depois tenta abrir:
+
+Image.open("Cinesenai.png")
+
+Isso carrega a logo do cinema.
+
+imagem.thumbnail((500, 250))
+
+Redimensiona a imagem.
+
+Depois ela é colocada em um CTkLabel.
+
+Se a imagem não existir:
+
+except:
+
+aparece:
+
+Logo não encontrada
+
+No final mostra:
+
+Gerenciador de Cinema
+
+e:
+
+Escolha uma opção no menu ao lado.
+
+12. Mostrar salas
+def mostrar_salas():
+
+Essa função mostra as 3 salas.
+
+for sala in range(1, NUM_SALAS + 1):
+
+Como NUM_SALAS = 3, o range gera:
+
+1
+2
+3
+
+Para cada sala ele cria um quadro.
+
+Depois:
+
+for periodo, emoji in [("Tarde", "🌞"), ("Noite", "🌙")]:
+
+Cria duas opções:
+
+🌞 Tarde
+🌙 Noite
+
+Cada botão chama:
+
+mostrar_sala(s, p)
+
+Ou seja, manda para a função:
+
+número da sala;
+período.
+13. Mostrar uma sala
+def mostrar_sala(sala, periodo):
+
+Essa função mostra os lugares daquela sala.
+
+Primeiro:
+
+limpar()
+
+Depois mostra o nome do filme.
+
+Também tenta carregar o cartaz correspondente.
+
+14. Consulta dos lugares no banco
+
+Aqui está uma das partes mais importantes:
+
+banco = conectar()
+cursor = banco.cursor()
+
+banco representa a conexão.
+
+cursor é usado para executar comandos SQL.
+
+Depois:
+
+cursor.execute("""
+    SELECT ...
+""", (...))
+
+O programa consulta o banco para descobrir quais lugares estão reservados.
+
+Ele usa:
+
+SELECT
+
+para buscar informações.
+
+E:
+
+LEFT JOIN
+
+para relacionar a tabela assento com a tabela reserva.
+
+Basicamente pergunta:
+
+"Quais assentos existem nessa sala e quais estão reservados nesse período?"
+
+15. fetchall()
+assentos = cursor.fetchall()
+
+Pega todos os resultados encontrados no banco.
+
+Depois fecha:
+
+cursor.close()
+banco.close()
+
+É uma boa prática fechar a conexão depois de usar.
+
+16. Construção da grade de lugares
+
+O programa cria uma grade visual.
+
+Primeiro coloca:
+
+TELA
+
+Depois coloca os números:
+
+1  2  3  4  5 ... 20
+
+E as filas:
+
+Fila 1
+Fila 2
+Fila 3
+...
+Fila 10
+17. Lugar livre ou reservado
+
+Esta parte:
+
+cor = "#B22222" if reservado else "#2E8B57"
+
+é um if em uma linha.
+
+Se estiver reservado:
+
+vermelho
+
+Se estiver livre:
+
+verde
+
+E:
+
+texto = "X" if reservado else str(lugar + 1)
+
+mostra:
+
+X
+
+para reservado.
+
+Caso contrário, mostra o número do lugar.
+
+Então visualmente:
+
+🟩 1
+🟩 2
+🟥 X
+🟩 4
+18. Legenda
+
+No final mostra:
+
+■ Livre     ■ X = Reservado
+
+Explica ao usuário o significado das cores.
+
+19. Reservar lugar
+def reservar_tela():
+
+Cria a tela de reserva.
+
+O usuário escolhe:
+
+data;
+período;
+sala;
+fila;
+lugar.
+
+O calendário vem de:
+
+DateEntry
+20. StringVar
+
+Por exemplo:
+
+periodo = ctk.StringVar(value="Tarde")
+
+StringVar é uma variável ligada à interface.
+
+Ela guarda o valor selecionado.
+
+Se o usuário escolher:
+
+Noite
+
+então:
+
+periodo.get()
+
+retorna:
+
+Noite
+21. Atualização automática do filme
+def atualizar_filme(*args):
+
+Quando sala ou período muda:
+
+FILMES[int(sala.get())][periodo.get()]
+
+procura o filme correspondente.
+
+Por exemplo:
+
+Sala 2 + Noite
+
+resulta em:
+
+Obsessão
+
+O:
+
+trace_add("write", atualizar_filme)
+
+faz a função ser executada quando o valor muda.
+
+22. Função reservar()
+
+Essa é chamada quando o usuário aperta Reservar.
+
+Primeiro conecta ao banco.
+
+Depois procura o ID do assento:
+
+SELECT id_assento
+FROM assento
+WHERE id_sala = ...
+AND fila = ...
+AND lugar = ...
+
+Por que buscar o ID?
+
+Porque a tabela reserva usa o id_assento.
+
+23. Verificação de existência
+resultado = cursor.fetchone()
+
+Pega apenas um resultado.
+
+Se não encontrar:
+
+if not resultado:
+
+mostra:
+
+Assento não encontrado!
+
+24. Verificação de reserva
+
+Depois procura se aquele assento já está reservado naquele período.
+
+Se estiver:
+
+if cursor.fetchone():
+
+mostra:
+
+Esse lugar já está reservado para esse período!
+
+Assim evita duas pessoas reservarem o mesmo lugar.
+
+25. Inserção da reserva
+
+Se estiver livre:
+
+INSERT INTO reserva (id_assento, turno)
+VALUES (%s, %s)
+
+Adiciona a reserva ao banco.
+
+Depois:
+
+banco.commit()
+
+confirma a alteração.
+
+Sem commit(), a alteração poderia não ser efetivamente salva.
+
+26. rollback()
+
+Se ocorrer algum erro:
+
+banco.rollback()
+
+desfaz alterações daquela operação.
+
+É como dizer:
+
+"Deu problema, volta tudo."
+
+27. finally
+finally:
+
+Executa no final, tenha dado erro ou não.
+
+O programa fecha:
+
+cursor.close()
+banco.close()
+
+Isso evita deixar conexões abertas.
+
+28. Cancelar reserva
+def cancelar_tela():
+
+É parecida com a tela de reserva.
+
+O usuário escolhe:
+
+período;
+sala;
+fila;
+lugar.
+
+Depois a função:
+
+cancelar()
+
+procura o assento no banco.
+
+Verifica se existe uma reserva.
+
+Se existir:
+
+DELETE FROM reserva
+
+remove a reserva.
+
+Depois:
+
+commit()
+
+salva a alteração.
+
+29. Histórico de cancelamento
+
+Quando uma reserva é cancelada:
+
+historico_cancelamentos_lista.append({...})
+
+coloca informações na lista.
+
+São guardados:
+
+data;
+sala;
+fila;
+lugar;
+período;
+filme.
+30. Compra
+def comprar_tela():
+
+Cria a tela de compra.
+
+O usuário escolhe:
+
+sala;
+período;
+quantidade de ingressos;
+pipoca;
+quantidade de pipocas;
+refrigerante;
+quantidade de refrigerantes.
+31. Preços dos ingressos
+if periodo.get() == "Tarde":
+    preco_ingresso = 20.00
+else:
+    preco_ingresso = 25.00
+
+Portanto:
+
+Tarde = R$20
+Noite = R$25
+32. Preços da pipoca
+precos_pipoca = {
+    "Nenhuma": 0.00,
+    "Pipoca pequena": 10.00,
+    "Pipoca média": 15.00,
+    "Pipoca grande": 20.00
+}
+
+É outro dicionário.
+
+Ele relaciona produto → preço.
+
+33. Preços dos refrigerantes
+precos_refrigerante = {
+    "Nenhum": 0.00,
+    "Coca-Cola": 8.00,
+    "Guaraná": 7.00,
+    "Fanta": 7.00,
+    "Sprite": 7.00
+}
+
+Mesma lógica.
+
+34. Cálculo do total
+
+A fórmula principal é:
+
+valor_total = (
+    preco_ingresso * quantidade_ingressos_valor
+    + preco_pipoca * quantidade_pipoca_valor
+    + preco_refrigerante * quantidade_refrigerante_valor
+)
+
+Ou seja:
+
+Total = ingressos + pipocas + refrigerantes
+
+Exemplo:
+
+2 ingressos × R$20 = R$40
+1 pipoca × R$15 = R$15
+2 refrigerantes × R$7 = R$14
+
+Total = R$69
+35. Atualização automática do preço
+
+Esses comandos:
+
+periodo.trace_add(...)
+quantidade_ingressos.trace_add(...)
+pipoca.trace_add(...)
+
+fazem o total ser recalculado quando o usuário muda alguma coisa.
+
+Então não precisa apertar um botão "Calcular".
+
+O programa recalcula automaticamente.
+
+36. Finalizar compra
+def finalizar_compra():
+
+Calcula novamente o total e cria um registro:
+
+historico_compras_lista.append({
+
+Guarda:
+
+data;
+sala;
+período;
+filme;
+ingressos;
+pipoca;
+quantidade;
+refrigerante;
+quantidade;
+total.
+
+Depois mostra uma mensagem de confirmação.
+
+Importante: essa compra não é salva no PostgreSQL. Ela fica apenas na lista Python.
+
+37. Cancelar itens da compra
+def cancelar_itens_compra():
+
+Permite cancelar:
+
+ingressos;
+pipoca;
+refrigerante;
+compra inteira.
+
+Primeiro verifica:
+
+if not historico_compras_lista:
+
+Se não houver compras, mostra:
+
+Nenhuma compra disponível para cancelamento.
+
+38. Escolher uma compra
+
+O programa transforma cada compra em uma opção:
+
+Compra 1 - Filme X
+Compra 2 - Filme Y
+Compra 3 - Filme Z
+
+O usuário escolhe uma.
+
+Depois o programa mostra os detalhes.
+
+39. Escolher o que cancelar
+
+O usuário pode escolher:
+
+Ingressos
+Pipoca
+Refrigerante
+Compra inteira
+
+Depois escolhe a quantidade.
+
+40. atualizar_detalhes()
+
+Essa função mostra os detalhes da compra selecionada:
+
+Filme
+Sala
+Período
+Ingressos
+Pipocas
+Refrigerantes
+Total
+
+Ela também muda as opções de quantidade dependendo do item escolhido.
+
+Por exemplo, se a compra possui 4 ingressos:
+
+1
+2
+3
+4
+
+ficam disponíveis.
+
+41. atualizar_valor()
+
+Calcula quanto será cancelado.
+
+Por exemplo:
+
+3 ingressos × R$20
+
+resultado:
+
+R$60
+
+O valor aparece em:
+
+Valor a cancelar: R$60,00
+42. cancelar_item()
+
+É a função que realmente modifica a compra.
+
+Se cancelar ingresso:
+
+registro["ingressos"] -= qtd
+
+diminui a quantidade.
+
+Depois:
+
+registro["total"] -= valor_cancelado
+
+diminui o preço.
+
+A mesma lógica acontece para pipoca e refrigerante.
+
+43. Cancelar compra inteira
+
+Se escolher:
+
+Compra inteira
+
+o código coloca tudo como zero:
+
+registro["ingressos"] = 0
+registro["qtd_pipocas"] = 0
+registro["qtd_refrigerantes"] = 0
+registro["total"] = 0.00
+
+Ou seja, a compra fica zerada.
+
+44. Histórico de compras
+def historico_compras():
+
+Cria uma tela com todas as compras realizadas.
+
+Usa:
+
+CTkScrollableFrame
+
+para permitir rolagem.
+
+Cada compra vira um "card".
+
+Mostra:
+
+Compra #1
+Data
+Filme
+Sala
+Período
+Ingressos
+Pipoca
+Refrigerante
+Total
+45. datetime.now()
+
+Quando registra uma compra:
+
+datetime.now()
+
+pega a data e hora atuais.
+
+Depois:
+
+strftime("%d/%m/%Y %H:%M")
+
+transforma em algo como:
+
+05/10/2026 14:30
+46. Histórico de cancelamentos
+def historico_cancelamentos():
+
+Funciona de maneira parecida.
+
+Mostra todos os cancelamentos.
+
+O programa diferencia:
+
+if registro.get("tipo") == "Item da compra":
+
+Se for cancelamento de item da compra, mostra:
+
+Filme
+Sala
+Período
+Item
+Quantidade
+
+Caso contrário, entende como cancelamento de reserva e mostra:
+
+Filme
+Sala
+Fila
+Lugar
+Período
+47. Menu lateral
+
+Depois são criados os botões:
+
+🏠 Início
+🎬 Mostrar sala
+🎟 Reservar lugar
+🛒 Comprar
+❌ Cancelar reserva
+↩️ Cancelar itens
+📋 Histórico de compras
+🗑 Histórico de cancelamentos
+🚪 Fechar programa
+
+Cada botão possui:
+
+command=alguma_funcao
+
+Isso significa:
+
+"Quando clicar neste botão, execute essa função."
+
+Por exemplo:
+
+command=mostrar_salas
+
+chama:
+
+mostrar_salas()
+48. Fechar programa
+command=root.destroy
+
+Quando clicar em Fechar programa, destrói a janela principal e encerra a aplicação.
+
+49. As duas últimas linhas
+inicio()
+root.mainloop()
+
+São MUITO importantes.
+
+inicio()
+
+Abre a tela inicial quando o programa começa.
+
+root.mainloop()
+
+Inicia o loop principal da interface gráfica.
+
+Ele fica esperando eventos:
+
+clique
+↓
+botão
+↓
+função
+↓
+atualização da tela
+↓
+espera outro clique
+
+Sem mainloop(), a janela praticamente não funcionaria como aplicação gráfica.
+
+🧠 Resumindo o código inteiro
+
+Se você precisar explicar esse projeto para um professor, pense nele assim:
+
+                    CINESENAI
+                       │
+        ┌──────────────┼──────────────┐
+        ↓              ↓              ↓
+    Interface       PostgreSQL      Listas
+  CustomTkinter     Reservas       Histórico
+        │              │              │
+        ↓              ↓              ↓
+      Menu         Assentos        Compras
+        │          Reservas       Cancelamentos
+        │
+ ┌──────┼───────────────┐
+ ↓      ↓       ↓       ↓
+Salas  Reserva Compra  Histórico
+       ↓       ↓
+    Cancelar  Cancelar
+Em uma frase:
+
+O programa cria uma interface de cinema onde o usuário pode visualizar salas e assentos, fazer e cancelar reservas usando PostgreSQL, comprar ingressos e produtos, cancelar itens das compras e consultar históricos.
+
+As coisas mais importantes para você entender
+
+Se você não quiser decorar as 1.482 linhas, concentre-se nestes conceitos:
+
+Código	O que significa
+def	Cria uma função
+if	Faz uma condição
+else	Alternativa da condição
+for	Repete algo várias vezes
+try	Tenta executar um código
+except	Trata um erro
+finally	Executa no final
+dict {}	Guarda informações em chave/valor
+list []	Guarda vários valores
+.append()	Adiciona algo à lista
+.get()	Pega o valor de uma variável da interface
+.configure()	Altera um elemento da interface
+cursor.execute()	Executa SQL
+fetchone()	Pega um resultado do banco
+fetchall()	Pega vários resultados
+commit()	Confirma alteração no banco
+rollback()	Desfaz alteração em caso de erro
+INSERT	Adiciona no banco
+SELECT	Consulta o banco
+DELETE	Remove do banco
+mainloop()	Mantém a interface funcionando
+
+A ideia central é simples: a interface recebe o que o usuário escolhe, as funções processam essas escolhas, o PostgreSQL cuida das reservas de assentos, e as listas Python cuidam dos históricos de compras e cancelamentos durante a execução.
+
+Isso já é o suficiente para você entender a arquitetura do projeto sem precisar tratar cada pack(), pady=8 e font=("Arial", 14) como se fossem segredos ancestrais da programação.
