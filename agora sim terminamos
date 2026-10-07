@@ -547,7 +547,7 @@ def cancelar_tela():
                 return
 
             cursor.execute("""
-                DELETE FROM reserva #remove a reserva
+                DELETE FROM reserva 
                 WHERE id_assento = %s
                 AND turno = %s
             """, (
