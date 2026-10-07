@@ -377,6 +377,7 @@ def reservar_tela():
                 int(lugar.get()) - 1
             ))
 
+#verificação de existência
             resultado = cursor.fetchone()
 
             if not resultado:
@@ -398,7 +399,7 @@ def reservar_tela():
                 periodo.get().lower()
             ))
 
-#verificação de existência
+#verificação de reserva
             if cursor.fetchone():
                 messagebox.showerror(
                     "Erro",
@@ -406,6 +407,7 @@ def reservar_tela():
                 )
                 return
 
+            #insere a reserva
             cursor.execute("""
                 INSERT INTO reserva (id_assento, turno)
                 VALUES (%s, %s)
@@ -427,7 +429,7 @@ def reservar_tela():
         except Exception as erro:
 
             if banco:
-                banco.rollback()
+                banco.rollback() #desfaz as alterações da operação 
 
             messagebox.showerror(
                 "Erro",
@@ -450,7 +452,7 @@ def reservar_tela():
         command=reservar
     ).pack(pady=20)
 
-
+#cancelar reserva
 def cancelar_tela():
     limpar()
     titulo("Cancelar Reserva")
@@ -545,7 +547,7 @@ def cancelar_tela():
                 return
 
             cursor.execute("""
-                DELETE FROM reserva
+                DELETE FROM reserva #remove a reserva
                 WHERE id_assento = %s
                 AND turno = %s
             """, (
@@ -553,6 +555,7 @@ def cancelar_tela():
                 periodo.get().lower()
             ))
 
+#histórico de cancelamentos
             historico_cancelamentos_lista.append({
                 "data": datetime.now(),
                 "sala": int(sala.get()),
@@ -601,7 +604,7 @@ def cancelar_tela():
         command=cancelar
     ).pack(pady=25)
 
-
+#compras
 def comprar_tela():
     limpar()
     titulo("Comprar Ingressos e Produtos")
@@ -741,11 +744,12 @@ def comprar_tela():
     )
     total.pack(pady=20)
 
+#calcula o total das compras
     def calcular_total(*args):
         if periodo.get() == "Tarde":
-            preco_ingresso = 20.00
+            preco_ingresso = 20.00 #preço do ingresso a tarde
         else:
-            preco_ingresso = 25.00
+            preco_ingresso = 25.00 #preço do ingresso a noite
 
         quantidade_ingressos_valor = int(quantidade_ingressos.get())
 
@@ -764,6 +768,7 @@ def comprar_tela():
             "Sprite": 7.00
         }
 
+#cálculo do total
         quantidade_pipoca_valor = int(quantidade_pipoca.get())
         quantidade_refrigerante_valor = int(quantidade_refrigerante.get())
 
@@ -780,6 +785,7 @@ def comprar_tela():
             text=f"Total: R$ {valor_total:.2f}".replace(".", ",")
         )
 
+#atualização automática do preço
     periodo.trace_add("write", calcular_total)
     quantidade_ingressos.trace_add("write", calcular_total)
     pipoca.trace_add("write", calcular_total)
@@ -787,6 +793,7 @@ def comprar_tela():
     refrigerante.trace_add("write", calcular_total)
     quantidade_refrigerante.trace_add("write", calcular_total)
 
+#finalizar compra
     def finalizar_compra():
 
         if pipoca.get() == "Nenhuma":
@@ -827,6 +834,7 @@ def comprar_tela():
             + precos_refrigerante[refrigerante.get()] * qtd_refrigerantes
         )
 
+#histórico de compras
         historico_compras_lista.append({
             "data": datetime.now(),
             "sala": int(sala.get()),
@@ -840,6 +848,7 @@ def comprar_tela():
             "total": valor_total
         })
 
+#mensagem de confirmação da compra
         messagebox.showinfo(
             "Compra realizada",
             f"Compra realizada com sucesso!\n\n"
@@ -864,7 +873,7 @@ def comprar_tela():
         command=finalizar_compra
     ).pack(pady=10)
 
-
+#cancelar itens da compra
 def cancelar_itens_compra():
     limpar()
     titulo("Cancelar Itens da Compra")
@@ -878,6 +887,7 @@ def cancelar_itens_compra():
         ).pack(pady=50)
         return
 
+#escolhe uma compra
     opcoes_compras = []
 
     for indice, registro in enumerate(historico_compras_lista, start=1):
@@ -909,6 +919,7 @@ def cancelar_itens_compra():
     )
     detalhes.pack(pady=10)
 
+#escolha o que cancelar
     ctk.CTkLabel(
         conteudo,
         text="Item para cancelar:"
